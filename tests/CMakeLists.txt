@@ -41,4 +41,5 @@ add_test(NAME xdrzcc_bad_output_header COMMAND ${XDRZCC} uint32.x out.c nosuchdi
 set_tests_properties(xdrzcc_bad_output_header PROPERTIES WILL_FAIL TRUE)
 
 unit_test_xdrzcc(uint32 uint32.x uint32.c)
+unit_test_xdrzcc(uint32_array uint32_array.x uint32_array.c)
 #unit_test_xdrzcc(rfc7863 rfc7863.x rfc7863.c)

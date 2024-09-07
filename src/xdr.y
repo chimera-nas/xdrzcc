@@ -151,6 +151,14 @@ typedef:
         $$->type->array = 1;
         $$->type->array_size = $5;
     }
+    | TYPEDEF type IDENTIFIER LBRACKET NUMBER RBRACKET
+    {
+        $$ = xdr_alloc(sizeof(*$$));
+        $$->name = $3;
+        $$->type = $2;
+        $$->type->array = 1;
+        $$->type->array_size = $5;
+    }
     ;
 
 enum_def:
@@ -244,6 +252,14 @@ struct_member:
         $$->type->vector = 1;
     }
     | type IDENTIFIER LBRACKET IDENTIFIER RBRACKET SEMICOLON
+    {
+        $$ = xdr_alloc(sizeof(*$$));
+        $$->type = $1;
+        $$->name = $2;
+        $$->type->array = 1;
+        $$->type->array_size = $4;
+    }
+    | type IDENTIFIER LBRACKET NUMBER RBRACKET SEMICOLON
     {
         $$ = xdr_alloc(sizeof(*$$));
         $$->type = $1;
