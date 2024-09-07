@@ -372,13 +372,13 @@ type:
     | STRING
     {
         $$ = xdr_alloc(sizeof(*$$));
-        $$->name = "const char *";
+        $$->name = "xdr_string";
         $$->builtin = 1;
     }
     | OPAQUE
     {
         $$ = xdr_alloc(sizeof(*$$));
-        $$->name = "struct xdr_iovec";
+        $$->name = "xdr_iovec";
         $$->builtin = 1;
         $$->opaque = 1;
     }

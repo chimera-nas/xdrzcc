@@ -1,10 +1,10 @@
 #include <stdint.h>
 
 #ifndef xdr_iovec
-struct xdr_iovec {
+typedef struct {
     void    *iov_base;
     uint32_t iov_len;
-};
+} xdr_iovec;
 
 #define xdr_iovec_data(iov) ((iov)->iov_base)
 #define xdr_iovec_len(iov) ((iov)->iov_len)

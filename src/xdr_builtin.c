@@ -41,15 +41,15 @@ xdr_ntoh64(uint64_t value)
 }
 
 struct xdr_cursor {
-    const struct xdr_iovec *cur;
-    const struct xdr_iovec *last;
+    const xdr_iovec *cur;
+    const xdr_iovec *last;
     unsigned int            offset;
 };
 
 static inline void
 xdr_cursor_init(
     struct xdr_cursor *cursor,
-    const struct xdr_iovec *iov,
+    const xdr_iovec *iov,
     int niov)
 {
     cursor->cur    = iov;
@@ -305,7 +305,7 @@ __unmarshall_int64_t(
 }
 static inline int
 __marshall_struct_xdr_iovec(
-    struct xdr_iovec *v,
+    xdr_iovec *v,
     int n,
     struct xdr_cursor *cursor)
 {
@@ -314,7 +314,7 @@ __marshall_struct_xdr_iovec(
 
 static inline int
 __unmarshall_struct_xdr_iovec(
-    struct xdr_iovec *v,
+    xdr_iovec *v,
     int n,
     struct xdr_cursor *cursor)
 {

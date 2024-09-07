@@ -98,29 +98,18 @@ emit_marshall(
     const char *name,
     struct xdr_type *type)
 {
-    char    type_sym[80], *ch;
-
-    snprintf(type_sym, sizeof(type_sym), "%s", type->name);
-
-    ch = type_sym;
-
-    while (*ch) {
-        if (*ch == ' ') *ch = '_';
-        ch++;
-    }
-
     if (type->vector) {
         fprintf(output,"    rc = 0;\n");
     } else if (type->array) {
 
         fprintf(output,"    rc = __marshall_%s(in->%s, %s, cursor);\n",
-            type_sym, name, type->array_size);
+            type->name, name, type->array_size);
 
     } else if (type->pointer) {
         fprintf(output,"    rc = 0;\n");
     } else {
         fprintf(output,"    rc = __marshall_%s(&in->%s, 1, cursor);\n",
-                type_sym, name);
+            type->name, name);
     }
 
     fprintf(output,"    if (rc < 0) return rc;\n");
@@ -133,29 +122,18 @@ emit_unmarshall(
     const char *name,
     struct xdr_type *type)
 {
-    char    type_sym[80], *ch;
-
-    snprintf(type_sym, sizeof(type_sym), "%s", type->name);
-
-    ch = type_sym;
-
-    while (*ch) {
-        if (*ch == ' ') *ch = '_';
-        ch++;
-    }
-
     if (type->vector) {
         fprintf(output,"    rc = 0;\n");
     } else if (type->array) {
 
         fprintf(output,"    rc = __unmarshall_%s(out->%s, %s, cursor);\n",
-            type_sym, name, type->array_size);
+            type->name, name, type->array_size);
 
     } else if (type->pointer) {
         fprintf(output,"    rc = 0;\n");
     } else {
         fprintf(output,"    rc = __unmarshall_%s(&out->%s, 1, cursor);\n",
-                type_sym, name);
+                type->name, name);
     }
 
     fprintf(output,"    if (rc < 0) return rc;\n");
@@ -469,13 +447,13 @@ int main(int argc, char *argv[])
         fprintf(header,"int marshall_%s(\n", xdr_structp->name);
         fprintf(header,"    const %s *in,\n", xdr_structp->name);
         fprintf(header,"    int n,\n");
-        fprintf(header,"    const struct xdr_iovec *iov,\n");
+        fprintf(header,"    const xdr_iovec *iov,\n");
         fprintf(header,"    int niov);\n\n");
 
         fprintf(header,"int unmarshall_%s(\n", xdr_structp->name);
         fprintf(header,"    %s *out,\n", xdr_structp->name);
         fprintf(header,"    int n,\n");
-        fprintf(header,"    const struct xdr_iovec *iov,\n");
+        fprintf(header,"    const xdr_iovec *iov,\n");
         fprintf(header,"    int niov);\n\n");
     }
 
@@ -483,13 +461,13 @@ int main(int argc, char *argv[])
         fprintf(header,"int marshall_%s(\n", xdr_unionp->name);
         fprintf(header,"    const %s *in,\n", xdr_unionp->name);
         fprintf(header,"    int n,\n");
-        fprintf(header,"    const struct xdr_iovec *iov,\n");
+        fprintf(header,"    const xdr_iovec *iov,\n");
         fprintf(header,"    int niov);\n\n");
 
         fprintf(header,"int unmarshall_%s(\n", xdr_unionp->name);
         fprintf(header,"    %s *out,\n", xdr_unionp->name);
         fprintf(header,"    int n,\n");
-        fprintf(header,"    const struct xdr_iovec *iov,\n");
+        fprintf(header,"    const xdr_iovec *iov,\n");
         fprintf(header,"    int niov);\n\n");
     }
 
@@ -597,7 +575,7 @@ int main(int argc, char *argv[])
         fprintf(source,"marshall_%s(\n", xdr_structp->name);
         fprintf(source,"    const %s *out,\n", xdr_structp->name);
         fprintf(source,"    int n,\n");
-        fprintf(source,"    const struct xdr_iovec *iov,\n");
+        fprintf(source,"    const xdr_iovec *iov,\n");
         fprintf(source,"    int niov) {\n");
         fprintf(source,"    struct xdr_cursor cursor;\n");
         fprintf(source,"    xdr_cursor_init(&cursor, iov, niov);\n");
@@ -608,7 +586,7 @@ int main(int argc, char *argv[])
         fprintf(source,"unmarshall_%s(\n", xdr_structp->name);
         fprintf(source,"    %s *out,\n", xdr_structp->name);
         fprintf(source,"    int n,\n");
-        fprintf(source,"    const struct xdr_iovec *iov,\n");
+        fprintf(source,"    const xdr_iovec *iov,\n");
         fprintf(source,"    int niov) {\n");
         fprintf(source,"    struct xdr_cursor cursor;\n");
         fprintf(source,"    xdr_cursor_init(&cursor, iov, niov);\n");
@@ -641,7 +619,7 @@ int main(int argc, char *argv[])
         fprintf(source,"marshall_%s(\n", xdr_unionp->name);
         fprintf(source,"    const %s *out,\n", xdr_unionp->name);
         fprintf(source,"    int n,\n");
-        fprintf(source,"    const struct xdr_iovec *iov,\n");
+        fprintf(source,"    const xdr_iovec *iov,\n");
         fprintf(source,"    int niov) {\n");
         fprintf(source,"    struct xdr_cursor cursor;\n");
         fprintf(source,"    xdr_cursor_init(&cursor, iov, niov);\n");
@@ -652,7 +630,7 @@ int main(int argc, char *argv[])
         fprintf(source,"unmarshall_%s(\n", xdr_unionp->name);
         fprintf(source,"    %s *out,\n", xdr_unionp->name);
         fprintf(source,"    int n,\n");
-        fprintf(source,"    const struct xdr_iovec *iov,\n");
+        fprintf(source,"    const xdr_iovec *iov,\n");
         fprintf(source,"    int niov) {\n");
         fprintf(source,"    struct xdr_cursor cursor;\n");
         fprintf(source,"    xdr_cursor_init(&cursor, iov, niov);\n");

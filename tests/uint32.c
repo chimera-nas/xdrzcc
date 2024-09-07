@@ -6,7 +6,7 @@ int main(int argc, char *argv[])
 {
     struct MyMsg    msg1, msg2;
     uint8_t buffer[256];
-    struct xdr_iovec iov;
+    xdr_iovec iov;
     int rc;
 
     xdr_iovec_set_data(&iov, buffer);
