@@ -1,7 +1,7 @@
 CMAKE_ARGS := -G Ninja
 CMAKE_ARGS_RELEASE := -DCMAKE_BUILD_TYPE=Release
 CMAKE_ARGS_DEBUG := -DCMAKE_BUILD_TYPE=Debug
-CTEST_ARGS := --output-on-failure
+CTEST_ARGS := -j 16 --output-on-failure
 
 default: release
 

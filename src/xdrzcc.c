@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <string.h>
+#include <errno.h>
 
 #include "y.tab.h"
 
@@ -146,7 +148,16 @@ int main(int argc, char *argv[])
     }
 
     yyin = fopen(argv[1], "r");
+
+    if (!yyin) {
+        fprintf(stderr,"Failed to open input file %s: %s\n",
+                argv[1], strerror(errno));
+        return 1;
+    }
+
     yyparse();
+
+    fclose(yyin);
 
     HASH_ITER(hh, xdr_identifiers, xdr_identp, xdr_identp_tmp) {
         switch(xdr_identp->type) {
@@ -216,6 +227,12 @@ int main(int argc, char *argv[])
     }
 
     header = fopen(argv[3], "w");
+
+    if (!header) {
+        fprintf(stderr,"Failed to open output header file%s: %s\n",
+                argv[3], strerror(errno));
+        return 1;
+    }
 
     fprintf(header, "#include <stdint.h>\n");
 
@@ -441,6 +458,12 @@ int main(int argc, char *argv[])
 
     source = fopen(argv[2], "w");
 
+    if (!source) {
+        fprintf(stderr,"Failed to open output source file %s: %s\n",
+                argv[2], strerror(errno));
+        return 1;
+    }
+
     fprintf(source,"#include \"%s\"\n", argv[3]);
 
     fprintf(source,"\n");
@@ -453,7 +476,7 @@ int main(int argc, char *argv[])
         fprintf(source,"int\n");
         fprintf(source,"__unmarshall_%s(\n", xdr_enump->name);
         fprintf(source,"    %s *out,\n", xdr_enump->name);
-        fprintf(header,"    int n,\n");
+        fprintf(source,"    int n,\n");
         fprintf(source,"    struct xdr_cursor *cursor);\n\n");
     }
 
@@ -461,7 +484,7 @@ int main(int argc, char *argv[])
         fprintf(source,"int\n");
         fprintf(source,"__unmarshall_%s(\n", xdr_structp->name);
         fprintf(source,"    %s *out,\n", xdr_structp->name);
-        fprintf(header,"    int n,\n");
+        fprintf(source,"    int n,\n");
         fprintf(source,"    struct xdr_cursor *cursor);\n\n");
     }
 
@@ -469,7 +492,7 @@ int main(int argc, char *argv[])
         fprintf(source,"int\n");
         fprintf(source,"__unmarshall_%s(\n", xdr_unionp->name);
         fprintf(source,"    %s *out,\n", xdr_unionp->name);
-        fprintf(header,"    int n,\n");
+        fprintf(source,"    int n,\n");
         fprintf(source,"    struct xdr_cursor *cursor);\n\n");
     }
 
@@ -478,7 +501,7 @@ int main(int argc, char *argv[])
         fprintf(source,"int\n");
         fprintf(source,"__unmarshall_%s(\n", xdr_enump->name);
         fprintf(source,"    %s *out,\n", xdr_enump->name);
-        fprintf(header,"    int n,\n");
+        fprintf(source,"    int n,\n");
         fprintf(source,"    struct xdr_cursor *cursor) {\n");
         fprintf(source,"    return 0;\n");
         fprintf(source, "}\n\n");
@@ -486,7 +509,7 @@ int main(int argc, char *argv[])
         fprintf(source,"int\n");
         fprintf(source,"unmarshall_%s(\n", xdr_enump->name);
         fprintf(source,"    %s *out,\n", xdr_enump->name);
-        fprintf(header,"    int n,\n");
+        fprintf(source,"    int n,\n");
         fprintf(source,"    int niov) {\n");
         fprintf(source,"    return 0;\n");
         fprintf(source, "}\n\n");
@@ -499,7 +522,7 @@ int main(int argc, char *argv[])
         fprintf(source,"int\n");
         fprintf(source,"__unmarshall_%s(\n", xdr_structp->name);
         fprintf(source,"    %s *out,\n", xdr_structp->name);
-        fprintf(header,"    int n,\n");
+        fprintf(source,"    int n,\n");
         fprintf(source,"    struct xdr_cursor *cursor) {\n");
 
         DL_FOREACH(xdr_structp->members, xdr_struct_memberp) {
@@ -514,7 +537,7 @@ int main(int argc, char *argv[])
         fprintf(source,"int\n");
         fprintf(source,"__unmarshall_%s(\n", xdr_unionp->name);
         fprintf(source,"    %s *out,\n", xdr_unionp->name);
-        fprintf(header,"    int n,\n");
+        fprintf(source,"    int n,\n");
         fprintf(source,"    struct xdr_cursor *cursor) {\n");
 
 
