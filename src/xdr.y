@@ -24,6 +24,7 @@ extern int yylex();
 
 void yyerror(const char *s) {
     fprintf(stderr, "Error: %s at line %d, column %d\n", s, line_num, column_num);
+    exit(1);
 }
 
 %}

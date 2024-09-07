@@ -35,11 +35,11 @@ set(BUILTIN_SOURCE ${CMAKE_CURRENT_BINARY_DIR}/xdr_builtin.c)
 
 generate_embedded_code(xdr_builtin.c ${BUILTIN_SOURCE} embedded_builtin_c)
 
-add_definitions(-g -Wall -Wno-unused)
-
 add_executable(xdrzcc
     xdrzcc.c
     ${BUILTIN_SOURCE}
     ${FLEX_lexer_OUTPUTS}
     ${BISON_parser_OUTPUT_SOURCE}
 )
+
+set(XDRZCC ${CMAKE_CURRENT_BINARY_DIR}/xdrzcc PARENT_SCOPE)
