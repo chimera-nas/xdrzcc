@@ -1,5 +1,44 @@
 #include <string.h>
-#include <arpa/inet.h>
+
+static inline uint32_t
+xdr_hton32(uint32_t value)
+{
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+    return __builtin_bswap32(value);
+#else
+    return value;
+#endif
+}
+
+static inline uint32_t
+xdr_ntoh32(uint32_t value)
+{
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+    return __builtin_bswap32(value);
+#else
+    return value;
+#endif
+}
+
+static inline uint64_t
+xdr_hton64(uint64_t value)
+{
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+    return __builtin_bswap64(value);
+#else
+    return value;
+#endif
+}
+
+static inline uint64_t
+xdr_ntoh64(uint64_t value)
+{
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+    return __builtin_bswap64(value);
+#else
+    return value;
+#endif
+}
 
 struct xdr_cursor {
     const struct xdr_iovec *cur;
@@ -114,7 +153,7 @@ __marshall_uint32_t(
     int i, rc;
 
     for (i = 0; i < n; ++i) {
-        tmp = htonl(v[i]);
+        tmp = xdr_hton32(v[i]);
         rc = xdr_cursor_append(cursor, &tmp, 4);
 
         if (rc < 0) return rc;
@@ -138,7 +177,26 @@ __unmarshall_uint32_t(
 
         if (rc < 0) return rc;
 
-        v[i] = ntohl(tmp);
+        v[i] = xdr_ntoh32(tmp);
+    }
+
+    return n << 2;
+}
+
+static inline int
+__marshall_int32_t(
+    const int32_t *v,
+    int n,
+    struct xdr_cursor *cursor)
+{
+    int32_t tmp;
+    int i, rc;
+
+    for (i = 0; i < n; ++i) {
+        tmp = xdr_hton32(v[i]);
+        rc = xdr_cursor_append(cursor, &tmp, 4);
+
+        if (rc < 0) return rc;
     }
 
     return n << 2;
@@ -150,7 +208,38 @@ __unmarshall_int32_t(
     int n,
     struct xdr_cursor *cursor)
 {
-    return 0;
+    int32_t tmp;
+    int i, rc;
+
+    for (i = 0; i < n; ++i) {
+
+        rc = xdr_cursor_extract(cursor, &tmp, 4);
+
+        if (rc < 0) return rc;
+
+        v[i] = xdr_ntoh32(tmp);
+    }
+
+    return n << 2;
+}
+
+static inline int
+__marshall_uint64_t(
+    const uint64_t *v,
+    int n,
+    struct xdr_cursor *cursor)
+{
+    uint64_t tmp;
+    int i, rc;
+
+    for (i = 0; i < n; ++i) {
+        tmp = xdr_hton64(v[i]);
+        rc = xdr_cursor_append(cursor, &tmp, 8);
+
+        if (rc < 0) return rc;
+    }
+
+    return n << 3;
 }
 
 static inline int
@@ -159,12 +248,64 @@ __unmarshall_uint64_t(
     int n,
     struct xdr_cursor *cursor)
 {
-    return 0;
+    uint64_t tmp;
+    int i, rc;
+
+    for (i = 0; i < n; ++i) {
+
+        rc = xdr_cursor_extract(cursor, &tmp, 8);
+
+        if (rc < 0) return rc;
+
+        v[i] = xdr_ntoh64(tmp);
+    }
+
+    return n << 3;
 }
+
+static inline int
+__marshall_int64_t(
+    const int64_t *v,
+    int n,
+    struct xdr_cursor *cursor)
+{
+    int64_t tmp;
+    int i, rc;
+
+    for (i = 0; i < n; ++i) {
+        tmp = xdr_hton64(v[i]);
+        rc = xdr_cursor_append(cursor, &tmp, 8);
+
+        if (rc < 0) return rc;
+    }
+
+    return n << 3;
+}
+
 
 static inline int
 __unmarshall_int64_t(
     int64_t *v,
+    int n,
+    struct xdr_cursor *cursor)
+{
+    int64_t tmp;
+    int i, rc;
+
+    for (i = 0; i < n; ++i) {
+
+        rc = xdr_cursor_extract(cursor, &tmp, 8);
+
+        if (rc < 0) return rc;
+
+        v[i] = xdr_ntoh64(tmp);
+    }
+
+    return n << 3;
+}
+static inline int
+__marshall_struct_xdr_iovec(
+    struct xdr_iovec *v,
     int n,
     struct xdr_cursor *cursor)
 {

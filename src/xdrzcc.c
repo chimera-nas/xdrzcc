@@ -110,14 +110,14 @@ emit_marshall(
     }
 
     if (type->vector) {
-
+        fprintf(output,"    rc = 0;\n");
     } else if (type->array) {
 
         fprintf(output,"    rc = __marshall_%s(in->%s, %s, cursor);\n",
             type_sym, name, type->array_size);
 
     } else if (type->pointer) {
-
+        fprintf(output,"    rc = 0;\n");
     } else {
         fprintf(output,"    rc = __marshall_%s(&in->%s, 1, cursor);\n",
                 type_sym, name);
@@ -145,14 +145,14 @@ emit_unmarshall(
     }
 
     if (type->vector) {
-
+        fprintf(output,"    rc = 0;\n");
     } else if (type->array) {
 
         fprintf(output,"    rc = __unmarshall_%s(out->%s, %s, cursor);\n",
             type_sym, name, type->array_size);
 
     } else if (type->pointer) {
-
+        fprintf(output,"    rc = 0;\n");
     } else {
         fprintf(output,"    rc = __unmarshall_%s(&out->%s, 1, cursor);\n",
                 type_sym, name);
@@ -619,6 +619,14 @@ int main(int argc, char *argv[])
 
     DL_FOREACH(xdr_unions, xdr_unionp) {
         fprintf(source,"int\n");
+        fprintf(source,"__marshall_%s(\n", xdr_unionp->name);
+        fprintf(source,"    %s *in,\n", xdr_unionp->name);
+        fprintf(source,"    int n,\n");
+        fprintf(source,"    struct xdr_cursor *cursor) {\n");
+        fprintf(source,"    return 0;\n");
+        fprintf(source,"}\n\n");
+
+        fprintf(source,"int\n");
         fprintf(source,"__unmarshall_%s(\n", xdr_unionp->name);
         fprintf(source,"    %s *out,\n", xdr_unionp->name);
         fprintf(source,"    int n,\n");
@@ -641,8 +649,8 @@ int main(int argc, char *argv[])
         fprintf(source, "}\n\n");
 
         fprintf(source,"int\n");
-        fprintf(source,"unmarshall_%s(\n", xdr_structp->name);
-        fprintf(source,"    %s *out,\n", xdr_structp->name);
+        fprintf(source,"unmarshall_%s(\n", xdr_unionp->name);
+        fprintf(source,"    %s *out,\n", xdr_unionp->name);
         fprintf(source,"    int n,\n");
         fprintf(source,"    const struct xdr_iovec *iov,\n");
         fprintf(source,"    int niov) {\n");
