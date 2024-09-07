@@ -1,3 +1,5 @@
+add_definitions(-UNDEBUG)
+
 macro(unit_test_xdrzcc name xdr_file c_file)
 
     set(XDR_C ${CMAKE_CURRENT_BINARY_DIR}/${name}_xdr.c)

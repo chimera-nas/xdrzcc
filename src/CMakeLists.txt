@@ -32,12 +32,15 @@ function(generate_embedded_code input_file output_file var_name)
 endfunction()
 
 set(BUILTIN_SOURCE ${CMAKE_CURRENT_BINARY_DIR}/xdr_builtin.c)
+set(BUILTIN_HEADER ${CMAKE_CURRENT_BINARY_DIR}/xdr_builtin_h.c)
 
 generate_embedded_code(xdr_builtin.c ${BUILTIN_SOURCE} embedded_builtin_c)
+generate_embedded_code(xdr_builtin.h ${BUILTIN_HEADER} embedded_builtin_h)
 
 add_executable(xdrzcc
     xdrzcc.c
     ${BUILTIN_SOURCE}
+    ${BUILTIN_HEADER}
     ${FLEX_lexer_OUTPUTS}
     ${BISON_parser_OUTPUT_SOURCE}
 )
