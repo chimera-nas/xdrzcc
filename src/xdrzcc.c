@@ -105,8 +105,6 @@ emit_marshall(
         fprintf(output,"    rc = __marshall_%s(in->%s, %s, cursor);\n",
             type->name, name, type->array_size);
 
-    } else if (type->pointer) {
-        fprintf(output,"    rc = 0;\n");
     } else {
         fprintf(output,"    rc = __marshall_%s(&in->%s, 1, cursor);\n",
             type->name, name);
@@ -129,8 +127,6 @@ emit_unmarshall(
         fprintf(output,"    rc = __unmarshall_%s(out->%s, %s, cursor);\n",
             type->name, name, type->array_size);
 
-    } else if (type->pointer) {
-        fprintf(output,"    rc = 0;\n");
     } else {
         fprintf(output,"    rc = __unmarshall_%s(&out->%s, 1, cursor);\n",
                 type->name, name);
@@ -298,8 +294,7 @@ int main(int argc, char *argv[])
             ready = 1;
 
             DL_FOREACH(xdr_structp->members, xdr_struct_memberp) {
-                if (xdr_struct_memberp->type->builtin ||
-                    xdr_struct_memberp->type->pointer) {
+                if (xdr_struct_memberp->type->builtin) {
                     continue;
                 }
 
@@ -347,9 +342,8 @@ int main(int argc, char *argv[])
                             emit_type->array_size);
                     }
                 } else {
-                    fprintf(header, "    %-39s %s%s;\n",
+                    fprintf(header, "    %-39s  %s;\n",
                         emit_type->name, 
-                        emit_type->pointer ? "*" : " ",
                         xdr_struct_memberp->name);
                 }
             }
@@ -371,8 +365,7 @@ int main(int argc, char *argv[])
 
             DL_FOREACH(xdr_unionp->cases, xdr_union_casep) {
                 if (!xdr_union_casep->type ||
-                    xdr_union_casep->type->builtin ||
-                    xdr_union_casep->type->pointer) {
+                    xdr_union_casep->type->builtin) {
                     continue;
                 }
 
@@ -425,9 +418,8 @@ int main(int argc, char *argv[])
                             emit_type->array_size);
                     }
                 } else {
-                    fprintf(header,"        %-34s %s%s;\n",
+                    fprintf(header,"        %-34s  %s;\n",
                         emit_type->name,
-                        emit_type->pointer ? "*" : " ",
                         xdr_union_casep->name); 
                 }
             }

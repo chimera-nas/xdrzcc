@@ -21,7 +21,6 @@ struct xdr_type {
     char *array_size;
     char *vector_bound;
     int builtin;
-    int pointer;
     int vector;
     int array;
     int opaque;

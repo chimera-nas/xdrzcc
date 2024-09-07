@@ -391,7 +391,8 @@ type:
     | type STAR
     {
         $$ = $1;
-        $$->pointer = 1;
+        $$->vector = 1;
+        $$->vector_bound = "1";
     }
     | type LBRACKET NUMBER RBRACKET
     {
