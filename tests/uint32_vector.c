@@ -1,6 +1,6 @@
 #include <assert.h>
 
-#include "uint32_xdr.h"
+#include "uint32_vector_xdr.h"
 
 int main(int argc, char *argv[])
 {
@@ -8,26 +8,32 @@ int main(int argc, char *argv[])
     xdr_dbuf *dbuf;
     uint8_t buffer[256];
     xdr_iovec iov;
-    int rc;
+    int rc, i;
 
     xdr_iovec_set_data(&iov, buffer);
     xdr_iovec_set_len(&iov, sizeof(buffer));
 
     dbuf = xdr_dbuf_alloc();
 
-    msg1.value = 42;
+    xdr_dbuf_reserve(&msg1, value, 16, dbuf);
+
+    for (i = 0; i < 16; ++i) {
+        msg1.value[i] = i;
+    }
 
     rc = marshall_MyMsg(&msg1, 1, &iov, 1);
 
-    assert(rc == 4);
+    assert(rc == 68);
 
     rc = unmarshall_MyMsg(&msg2, 1, &iov, 1, dbuf); 
 
-    assert(rc == 4);
+    assert(rc == 68);
 
-    assert(msg1.value == msg2.value);
+    assert(msg2.num_value == 16);
 
-    xdr_dbuf_free(dbuf);
+    for (i = 0; i < 16; ++i) {
+        assert(msg2.value[i] == i);
+    }
 
     return 0;
 }

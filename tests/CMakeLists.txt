@@ -42,4 +42,6 @@ set_tests_properties(xdrzcc_bad_output_header PROPERTIES WILL_FAIL TRUE)
 
 unit_test_xdrzcc(uint32 uint32.x uint32.c)
 unit_test_xdrzcc(uint32_array uint32_array.x uint32_array.c)
+unit_test_xdrzcc(uint32_vector_one uint32_vector_one.x uint32_vector_one.c)
+unit_test_xdrzcc(uint32_vector uint32_vector.x uint32_vector.c)
 #unit_test_xdrzcc(rfc7863 rfc7863.x rfc7863.c)

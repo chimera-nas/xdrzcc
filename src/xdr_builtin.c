@@ -1,4 +1,31 @@
+#include <stdlib.h>
 #include <string.h>
+
+#define unlikely(x)    __builtin_expect(!!(x), 0) 
+
+xdr_dbuf *
+xdr_dbuf_alloc(void)
+{
+    xdr_dbuf *dbuf;
+
+    dbuf = malloc(sizeof(*dbuf));
+
+    dbuf->buffer = malloc(4096);
+
+    dbuf->used = 0;
+    dbuf->size = 4096;
+
+    return dbuf;
+
+}
+
+void
+xdr_dbuf_free(xdr_dbuf *dbuf)
+{
+    free(dbuf->buffer);
+    free(dbuf);
+}
+
 
 static inline uint32_t
 xdr_hton32(uint32_t value)
