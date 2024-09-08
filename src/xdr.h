@@ -75,6 +75,7 @@ struct xdr_union {
     struct xdr_type *pivot_type;
     char   *pivot_name;
     struct xdr_union_case *cases;
+    struct xdr_union_case *default_case;
     struct xdr_union *prev;
     struct xdr_union *next;
 

@@ -408,6 +408,7 @@ int main(int argc, char *argv[])
             fprintf(header, "struct %s {\n", xdr_unionp->name);
             fprintf(header, "    %-39s %s;\n", xdr_unionp->pivot_type->name, xdr_unionp->pivot_name);
             fprintf(header, "    union {\n");
+
             DL_FOREACH(xdr_unionp->cases, xdr_union_casep) {
 
                 if (!xdr_union_casep->type) {
@@ -445,6 +446,13 @@ int main(int argc, char *argv[])
                         emit_type->name,
                         xdr_union_casep->name); 
                 }
+            }
+
+            HASH_FIND_STR(xdr_identifiers, xdr_unionp->pivot_type->name, chkm);
+
+            if (chkm && chkm->type == XDR_ENUM) {
+                xdr_unionp->pivot_type->name = "uint32_t";
+                xdr_unionp->pivot_type->builtin = 1;
             }
 
             fprintf(header,"    };\n");
@@ -598,7 +606,31 @@ int main(int argc, char *argv[])
         fprintf(source,"    const %s *in,\n", xdr_unionp->name);
         fprintf(source,"    int n,\n");
         fprintf(source,"    struct xdr_cursor *cursor) {\n");
-        fprintf(source,"    return 0;\n");
+        fprintf(source,"    int rc, len = 0;\n");
+
+        emit_marshall(source, xdr_unionp->pivot_name, xdr_unionp->pivot_type);
+
+        fprintf(source,"    switch (in->%s) {\n", xdr_unionp->pivot_name);
+
+        DL_FOREACH(xdr_unionp->cases, xdr_union_casep) {
+            if (strcmp(xdr_union_casep->label,"default") != 0) {
+                fprintf(source,"    case %s:\n", xdr_union_casep->label);
+                if (xdr_union_casep->voided) {
+                    fprintf(source,"        break;\n");
+                } else if (xdr_union_casep->type) {
+                    emit_marshall(source, xdr_union_casep->name, xdr_union_casep->type);
+                    fprintf(source,"        break;\n");
+                }
+            }
+        }
+
+        DL_FOREACH(xdr_unionp->cases, xdr_union_casep) {
+            if (strcmp(xdr_union_casep->label,"default") == 0) {
+                fprintf(source,"    default:\n");
+            }
+        }
+        fprintf(source,"    };\n");
+        fprintf(source,"    return len;\n");
         fprintf(source,"}\n\n");
 
         fprintf(source,"static int\n");
@@ -607,10 +639,31 @@ int main(int argc, char *argv[])
         fprintf(source,"    int n,\n");
         fprintf(source,"    struct xdr_cursor *cursor,\n");
         fprintf(source,"    xdr_dbuf *dbuf) {\n");
+        fprintf(source,"    int rc, len = 0;\n");
 
+        emit_unmarshall(source, xdr_unionp->pivot_name, xdr_unionp->pivot_type);
 
-        //emit_unmarshall(source, xdr_struct_memberp->name, xdr_struct_memberp->type);
-        fprintf(source,"    return 0;\n");
+        fprintf(source,"    switch (out->%s) {\n", xdr_unionp->pivot_name);
+
+        DL_FOREACH(xdr_unionp->cases, xdr_union_casep) {
+            if (strcmp(xdr_union_casep->label,"default") != 0) {
+                fprintf(source,"    case %s:\n", xdr_union_casep->label);
+                if (xdr_union_casep->voided) {
+                    fprintf(source,"        break;\n");
+                } else if (xdr_union_casep->type) {
+                    emit_unmarshall(source, xdr_union_casep->name, xdr_union_casep->type);
+                    fprintf(source,"        break;\n");
+                }
+            }
+        }
+
+        DL_FOREACH(xdr_unionp->cases, xdr_union_casep) {
+            if (strcmp(xdr_union_casep->label,"default") == 0) {
+                fprintf(source,"    default:\n");
+            }
+        }
+        fprintf(source,"    };\n");
+        fprintf(source,"    return len;\n");
         fprintf(source,"}\n\n");
 
         fprintf(source,"int\n");
