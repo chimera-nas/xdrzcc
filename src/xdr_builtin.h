@@ -1,7 +1,15 @@
 #include <stdint.h>
+#include <string.h>
 
 #ifndef XDR_MAX_DBUF
 #define XDR_MAX_DBUF 4096
+#endif
+
+#ifndef xdr_string
+typedef struct {
+    uint32_t len;
+    char    *str;
+} xdr_string;
 #endif
 
 #ifndef xdr_dbuf
@@ -26,6 +34,12 @@ xdr_dbuf_reset(xdr_dbuf *dbuf)
     dbuf->used += num * sizeof(*((structp)->member)); \
 }
 
+#define xdr_dbuf_strncpy(structp, member, istr, ilen, dbuf) { \
+    (structp)->member.len = (ilen); \
+    (structp)->member.str = (char *)(dbuf->buffer + (dbuf)->used); \
+    memcpy((structp)->member.str, (istr), (ilen) + 1); \
+    (dbuf)->used += (ilen) + 1; \
+}
 #endif
 
 #ifndef xdr_iovec

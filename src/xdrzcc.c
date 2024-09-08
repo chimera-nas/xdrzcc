@@ -162,7 +162,7 @@ int main(int argc, char *argv[])
     struct xdr_enum_entry *xdr_enum_entryp;
     struct xdr_const *xdr_constp;
     struct xdr_buffer *xdr_buffer;
-    struct xdr_identifier *xdr_identp, *xdr_identp_tmp, *chk;
+    struct xdr_identifier *xdr_identp, *xdr_identp_tmp, *chk, *chkm;
     int unemitted, ready;
     FILE *header, *source;
 
@@ -311,9 +311,9 @@ int main(int argc, char *argv[])
                     continue;
                 }
 
-                HASH_FIND_STR(xdr_identifiers, xdr_struct_memberp->type->name, chk);
+                HASH_FIND_STR(xdr_identifiers, xdr_struct_memberp->type->name, chkm);
 
-                if (!chk->emitted) {
+                if (chk != chkm && !chkm->emitted) {
                     ready = 0;
                     break;
                 }
@@ -361,7 +361,12 @@ int main(int argc, char *argv[])
                 }
 
                 if (chk && chk->type == XDR_ENUM) {
+                    /* Now that we've emitted the struct member,
+                     * treat this as a builtin uint32 for 
+                     * the purpose of marshall/unmarshall
+                     */
                     xdr_struct_memberp->type->name = "uint32_t";
+                    xdr_struct_memberp->type->builtin = 1;
                 }
 
             }
@@ -518,6 +523,12 @@ int main(int argc, char *argv[])
 
     DL_FOREACH(xdr_unions, xdr_unionp) {
         fprintf(source,"static int\n");
+        fprintf(source,"__marshall_%s(\n", xdr_unionp->name);
+        fprintf(source,"    const %s *in,\n", xdr_unionp->name);
+        fprintf(source,"    int n,\n");
+        fprintf(source,"    struct xdr_cursor *cursor);\n\n");
+
+        fprintf(source,"static int\n");
         fprintf(source,"__unmarshall_%s(\n", xdr_unionp->name);
         fprintf(source,"    %s *out,\n", xdr_unionp->name);
         fprintf(source,"    int n,\n");
@@ -584,7 +595,7 @@ int main(int argc, char *argv[])
     DL_FOREACH(xdr_unions, xdr_unionp) {
         fprintf(source,"static int\n");
         fprintf(source,"__marshall_%s(\n", xdr_unionp->name);
-        fprintf(source,"    %s *in,\n", xdr_unionp->name);
+        fprintf(source,"    const %s *in,\n", xdr_unionp->name);
         fprintf(source,"    int n,\n");
         fprintf(source,"    struct xdr_cursor *cursor) {\n");
         fprintf(source,"    return 0;\n");

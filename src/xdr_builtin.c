@@ -171,6 +171,41 @@ xdr_cursor_append(
 }
 
 static inline int
+xdr_cursor_skip(
+    struct xdr_cursor *cursor,
+    unsigned int bytes)
+{
+    unsigned int done, chunk;
+
+    if (cursor->offset + bytes <= xdr_iovec_len(cursor->cur)) {
+        cursor->offset += bytes;
+    } else {
+
+        done = 0;
+
+        while (done < bytes) {
+
+            chunk = xdr_iovec_len(cursor->cur) - cursor->offset;
+
+            if (chunk > bytes - done) {
+                chunk = bytes - done;
+            }
+
+            done += chunk;
+
+            if (done < bytes && cursor->cur == cursor->last) {
+                return -1;
+            }
+
+            cursor->cur++;
+            cursor->offset = 0;
+        }
+    }
+
+    return bytes;
+}
+
+static inline int
 __marshall_uint32_t(
     const uint32_t *v,
     int n,
@@ -334,6 +369,87 @@ __unmarshall_int64_t(
 
     return n << 3;
 }
+
+static inline int
+__marshall_xdr_string(
+    const xdr_string *str,
+    int n,
+    struct xdr_cursor *cursor)
+{
+    const uint32_t zero = 0;
+    int i, rc, pad, len = 0;
+
+    for (i = 0; i < n; ++i) {
+
+        rc = __marshall_uint32_t(&str[i].len, 1, cursor);
+
+        if (unlikely(rc < 0)) return rc;
+
+        len += rc;
+
+        rc = xdr_cursor_append(cursor, str[i].str, str[i].len);
+
+        len += str[i].len;
+
+        if (unlikely(rc < 0)) return rc;
+
+        pad = (4 - (len & 0x3)) & 0x3;
+
+        if (pad) {
+            rc = xdr_cursor_append(cursor, &zero, pad);
+
+            if (unlikely(rc < 0)) return rc;
+
+            len += rc;
+        }
+    }
+
+    return len;
+}
+
+static inline int
+__unmarshall_xdr_string(
+    xdr_string *str,
+    int n,
+    struct xdr_cursor *cursor,
+    xdr_dbuf *dbuf)
+{
+    int i, rc, pad, len = 0;
+
+    for (i = 0; i < n; ++i) {
+
+        rc = __unmarshall_uint32_t(&str[i].len, 1, cursor, dbuf);
+
+        if (unlikely(rc < 0)) return rc;
+
+        len += rc;
+
+        str[i].str = dbuf->buffer + dbuf->used;
+
+        dbuf->used += str[i].len + 1;
+
+        rc = xdr_cursor_extract(cursor, str[i].str, str[i].len);
+
+        if (unlikely(rc < 0)) return rc;
+
+        str[i].str[str[i].len] = '\0';
+
+        len += str[i].len;
+
+        pad = (4 - (str[i].len & 0x3)) & 0x3;
+
+        if (pad) {
+            rc = xdr_cursor_skip(cursor, pad);
+
+            if (unlikely(rc < 0)) return rc;
+    
+            len += rc;
+        }
+    }
+ 
+    return len; 
+}
+
 static inline int
 __marshall_struct_xdr_iovec(
     xdr_iovec *v,
