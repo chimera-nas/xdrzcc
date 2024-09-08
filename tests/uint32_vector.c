@@ -35,5 +35,7 @@ int main(int argc, char *argv[])
         assert(msg2.value[i] == i);
     }
 
+    xdr_dbuf_free(dbuf);
+
     return 0;
 }
