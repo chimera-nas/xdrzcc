@@ -502,13 +502,13 @@ int main(int argc, char *argv[])
     fprintf(source,"\n");
 
     DL_FOREACH(xdr_structs, xdr_structp) {
-        fprintf(source,"int\n");
+        fprintf(source,"static int\n");
         fprintf(source,"__marshall_%s(\n", xdr_structp->name);
         fprintf(source,"    const %s *in,\n", xdr_structp->name);
         fprintf(source,"    int n,\n");
         fprintf(source,"    struct xdr_cursor *cursor);\n\n");
 
-        fprintf(source,"int\n");
+        fprintf(source,"static int\n");
         fprintf(source,"__unmarshall_%s(\n", xdr_structp->name);
         fprintf(source,"    %s *out,\n", xdr_structp->name);
         fprintf(source,"    int n,\n");
@@ -517,7 +517,7 @@ int main(int argc, char *argv[])
     }
 
     DL_FOREACH(xdr_unions, xdr_unionp) {
-        fprintf(source,"int\n");
+        fprintf(source,"static int\n");
         fprintf(source,"__unmarshall_%s(\n", xdr_unionp->name);
         fprintf(source,"    %s *out,\n", xdr_unionp->name);
         fprintf(source,"    int n,\n");
@@ -527,7 +527,7 @@ int main(int argc, char *argv[])
 
     DL_FOREACH(xdr_structs, xdr_structp) {
 
-        fprintf(source,"int\n");
+        fprintf(source,"static int\n");
         fprintf(source,"__marshall_%s(\n", xdr_structp->name);
         fprintf(source,"    const %s *in,\n", xdr_structp->name);
         fprintf(source,"    int n,\n");
@@ -541,7 +541,7 @@ int main(int argc, char *argv[])
         fprintf(source,"    return len;\n");
         fprintf(source, "}\n\n");
 
-        fprintf(source,"int\n");
+        fprintf(source,"static int\n");
         fprintf(source,"__unmarshall_%s(\n", xdr_structp->name);
         fprintf(source,"    %s *out,\n", xdr_structp->name);
         fprintf(source,"    int n,\n");
@@ -582,7 +582,7 @@ int main(int argc, char *argv[])
     } 
 
     DL_FOREACH(xdr_unions, xdr_unionp) {
-        fprintf(source,"int\n");
+        fprintf(source,"static int\n");
         fprintf(source,"__marshall_%s(\n", xdr_unionp->name);
         fprintf(source,"    %s *in,\n", xdr_unionp->name);
         fprintf(source,"    int n,\n");
@@ -590,7 +590,7 @@ int main(int argc, char *argv[])
         fprintf(source,"    return 0;\n");
         fprintf(source,"}\n\n");
 
-        fprintf(source,"int\n");
+        fprintf(source,"static int\n");
         fprintf(source,"__unmarshall_%s(\n", xdr_unionp->name);
         fprintf(source,"    %s *out,\n", xdr_unionp->name);
         fprintf(source,"    int n,\n");
