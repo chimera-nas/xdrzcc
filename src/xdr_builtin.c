@@ -193,7 +193,8 @@ static inline int
 __unmarshall_uint32_t(
     uint32_t *v,
     int n,
-    struct xdr_cursor *cursor)
+    struct xdr_cursor *cursor,
+    xdr_dbuf *dbuf)
 {
     uint32_t tmp;
     int i, rc;
@@ -233,7 +234,8 @@ static inline int
 __unmarshall_int32_t(
     int32_t *v,
     int n,
-    struct xdr_cursor *cursor)
+    struct xdr_cursor *cursor,
+    xdr_dbuf *dbuf)
 {
     int32_t tmp;
     int i, rc;
@@ -273,7 +275,8 @@ static inline int
 __unmarshall_uint64_t(
     uint64_t *v,
     int n,
-    struct xdr_cursor *cursor)
+    struct xdr_cursor *cursor,
+    xdr_dbuf *dbuf)
 {
     uint64_t tmp;
     int i, rc;
@@ -314,7 +317,8 @@ static inline int
 __unmarshall_int64_t(
     int64_t *v,
     int n,
-    struct xdr_cursor *cursor)
+    struct xdr_cursor *cursor,
+    xdr_dbuf *dbuf)
 {
     int64_t tmp;
     int i, rc;
@@ -343,7 +347,8 @@ static inline int
 __unmarshall_struct_xdr_iovec(
     xdr_iovec *v,
     int n,
-    struct xdr_cursor *cursor)
+    struct xdr_cursor *cursor,
+    xdr_dbuf *dbuf)
 {
     return 0;
 }

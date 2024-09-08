@@ -1,0 +1,33 @@
+#include <assert.h>
+
+#include "enum_xdr.h"
+
+int main(int argc, char *argv[])
+{
+    struct MyMsg    msg1, msg2;
+    xdr_dbuf *dbuf;
+    uint8_t buffer[256];
+    xdr_iovec iov;
+    int rc;
+
+    xdr_iovec_set_data(&iov, buffer);
+    xdr_iovec_set_len(&iov, sizeof(buffer));
+
+    dbuf = xdr_dbuf_alloc();
+
+    msg1.value = TWO;
+
+    rc = marshall_MyMsg(&msg1, 1, &iov, 1);
+
+    assert(rc == 4);
+
+    rc = unmarshall_MyMsg(&msg2, 1, &iov, 1, dbuf); 
+
+    assert(rc == 4);
+
+    assert(msg2.value == TWO);
+
+    xdr_dbuf_free(dbuf);
+
+    return 0;
+}

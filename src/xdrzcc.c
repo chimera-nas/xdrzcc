@@ -126,22 +126,22 @@ emit_unmarshall(
     struct xdr_type *type)
 {
     if (type->vector) {
-        fprintf(output,"    rc = __unmarshall_uint32_t(&out->num_%s, 1, cursor);\n",
+        fprintf(output,"    rc = __unmarshall_uint32_t(&out->num_%s, 1, cursor, dbuf);\n",
             name);
         fprintf(output,"    if (unlikely(rc < 0)) return rc;\n");
         fprintf(output,"    len += rc;\n");
 
         fprintf(output,"     xdr_dbuf_reserve(out, %s, out->num_%s, dbuf);\n",
             name, name);
-        fprintf(output,"    rc = __unmarshall_%s(out->%s, out->num_%s, cursor);\n",
+        fprintf(output,"    rc = __unmarshall_%s(out->%s, out->num_%s, cursor, dbuf);\n",
             type->name, name, name);
     } else if (type->array) {
 
-        fprintf(output,"    rc = __unmarshall_%s(out->%s, %s, cursor);\n",
+        fprintf(output,"    rc = __unmarshall_%s(out->%s, %s, cursor, dbuf);\n",
             type->name, name, type->array_size);
 
     } else {
-        fprintf(output,"    rc = __unmarshall_%s(&out->%s, 1, cursor);\n",
+        fprintf(output,"    rc = __unmarshall_%s(&out->%s, 1, cursor, dbuf);\n",
                 type->name, name);
     }
 
@@ -359,6 +359,11 @@ int main(int argc, char *argv[])
                         emit_type->name, 
                         xdr_struct_memberp->name);
                 }
+
+                if (chk && chk->type == XDR_ENUM) {
+                    xdr_struct_memberp->type->name = "uint32_t";
+                }
+
             }
             fprintf(header,"};\n\n");
 
@@ -496,14 +501,6 @@ int main(int argc, char *argv[])
 
     fprintf(source,"\n");
 
-    DL_FOREACH(xdr_enums, xdr_enump) {
-        fprintf(source,"int\n");
-        fprintf(source,"__unmarshall_%s(\n", xdr_enump->name);
-        fprintf(source,"    %s *out,\n", xdr_enump->name);
-        fprintf(source,"    int n,\n");
-        fprintf(source,"    struct xdr_cursor *cursor);\n\n");
-    }
-
     DL_FOREACH(xdr_structs, xdr_structp) {
         fprintf(source,"int\n");
         fprintf(source,"__marshall_%s(\n", xdr_structp->name);
@@ -527,28 +524,6 @@ int main(int argc, char *argv[])
         fprintf(source,"    struct xdr_cursor *cursor,\n");
         fprintf(source,"    xdr_dbuf *dbuf);\n\n");
     }
-
-    DL_FOREACH(xdr_enums, xdr_enump) {
-
-        fprintf(source,"int\n");
-        fprintf(source,"__unmarshall_%s(\n", xdr_enump->name);
-        fprintf(source,"    %s *out,\n", xdr_enump->name);
-        fprintf(source,"    int n,\n");
-        fprintf(source,"    struct xdr_cursor *cursor) {\n");
-        fprintf(source,"    return 0;\n");
-        fprintf(source, "}\n\n");
-
-        fprintf(source,"int\n");
-        fprintf(source,"unmarshall_%s(\n", xdr_enump->name);
-        fprintf(source,"    %s *out,\n", xdr_enump->name);
-        fprintf(source,"    int n,\n");
-        fprintf(source,"    int niov) {\n");
-        fprintf(source,"    return 0;\n");
-        fprintf(source, "}\n\n");
-
-
-    }
-
 
     DL_FOREACH(xdr_structs, xdr_structp) {
 
