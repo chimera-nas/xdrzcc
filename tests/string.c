@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <assert.h>
 
 #include "string_xdr.h"
@@ -21,8 +20,6 @@ int main(int argc, char *argv[])
     xdr_dbuf_strncpy(&msg1, string3, "123456789", 9, dbuf);
 
     rc = marshall_MyMsg(&msg1, 1, &iov, 1);
-
-    fprintf(stderr,"marshalled to %d bytes\n", rc);
 
     assert(rc == 36);
 

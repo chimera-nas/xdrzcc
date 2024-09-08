@@ -2,6 +2,7 @@
 #include <string.h>
 
 #define unlikely(x)    __builtin_expect(!!(x), 0) 
+#define FORCE_INLINE __attribute__((always_inline)) inline
 
 xdr_dbuf *
 xdr_dbuf_alloc(void)
@@ -27,7 +28,7 @@ xdr_dbuf_free(xdr_dbuf *dbuf)
 }
 
 
-static inline uint32_t
+static FORCE_INLINE uint32_t
 xdr_hton32(uint32_t value)
 {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
@@ -37,7 +38,7 @@ xdr_hton32(uint32_t value)
 #endif
 }
 
-static inline uint32_t
+static FORCE_INLINE uint32_t
 xdr_ntoh32(uint32_t value)
 {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
@@ -47,7 +48,7 @@ xdr_ntoh32(uint32_t value)
 #endif
 }
 
-static inline uint64_t
+static FORCE_INLINE uint64_t
 xdr_hton64(uint64_t value)
 {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
@@ -57,7 +58,7 @@ xdr_hton64(uint64_t value)
 #endif
 }
 
-static inline uint64_t
+static FORCE_INLINE uint64_t
 xdr_ntoh64(uint64_t value)
 {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
@@ -73,7 +74,7 @@ struct xdr_cursor {
     unsigned int            offset;
 };
 
-static inline void
+static FORCE_INLINE void
 xdr_cursor_init(
     struct xdr_cursor *cursor,
     const xdr_iovec *iov,
@@ -205,7 +206,7 @@ xdr_cursor_skip(
     return bytes;
 }
 
-static inline int
+static FORCE_INLINE int
 __marshall_uint32_t(
     const uint32_t *v,
     int n,
@@ -218,13 +219,13 @@ __marshall_uint32_t(
         tmp = xdr_hton32(v[i]);
         rc = xdr_cursor_append(cursor, &tmp, 4);
 
-        if (rc < 0) return rc;
+        if (unlikely(rc < 0)) return rc;
     }        
 
     return n << 2;
 }
 
-static inline int
+static FORCE_INLINE int
 __unmarshall_uint32_t(
     uint32_t *v,
     int n,
@@ -238,7 +239,7 @@ __unmarshall_uint32_t(
 
         rc = xdr_cursor_extract(cursor, &tmp, 4);
 
-        if (rc < 0) return rc;
+        if (unlikely(rc < 0)) return rc;
 
         v[i] = xdr_ntoh32(tmp);
     }
@@ -246,7 +247,7 @@ __unmarshall_uint32_t(
     return n << 2;
 }
 
-static inline int
+static FORCE_INLINE int
 __marshall_int32_t(
     const int32_t *v,
     int n,
@@ -259,13 +260,13 @@ __marshall_int32_t(
         tmp = xdr_hton32(v[i]);
         rc = xdr_cursor_append(cursor, &tmp, 4);
 
-        if (rc < 0) return rc;
+        if (unlikely(rc < 0)) return rc;
     }
 
     return n << 2;
 }
 
-static inline int
+static FORCE_INLINE int
 __unmarshall_int32_t(
     int32_t *v,
     int n,
@@ -279,7 +280,7 @@ __unmarshall_int32_t(
 
         rc = xdr_cursor_extract(cursor, &tmp, 4);
 
-        if (rc < 0) return rc;
+        if (unlikely(rc < 0)) return rc;
 
         v[i] = xdr_ntoh32(tmp);
     }
@@ -287,7 +288,7 @@ __unmarshall_int32_t(
     return n << 2;
 }
 
-static inline int
+static FORCE_INLINE int
 __marshall_uint64_t(
     const uint64_t *v,
     int n,
@@ -300,13 +301,13 @@ __marshall_uint64_t(
         tmp = xdr_hton64(v[i]);
         rc = xdr_cursor_append(cursor, &tmp, 8);
 
-        if (rc < 0) return rc;
+        if (unlikely(rc < 0)) return rc;
     }
 
     return n << 3;
 }
 
-static inline int
+static FORCE_INLINE int
 __unmarshall_uint64_t(
     uint64_t *v,
     int n,
@@ -320,7 +321,7 @@ __unmarshall_uint64_t(
 
         rc = xdr_cursor_extract(cursor, &tmp, 8);
 
-        if (rc < 0) return rc;
+        if (unlikely(rc < 0)) return rc;
 
         v[i] = xdr_ntoh64(tmp);
     }
@@ -328,7 +329,7 @@ __unmarshall_uint64_t(
     return n << 3;
 }
 
-static inline int
+static FORCE_INLINE int
 __marshall_int64_t(
     const int64_t *v,
     int n,
@@ -341,14 +342,14 @@ __marshall_int64_t(
         tmp = xdr_hton64(v[i]);
         rc = xdr_cursor_append(cursor, &tmp, 8);
 
-        if (rc < 0) return rc;
+        if (unlikely(rc < 0)) return rc;
     }
 
     return n << 3;
 }
 
 
-static inline int
+static FORCE_INLINE int
 __unmarshall_int64_t(
     int64_t *v,
     int n,
@@ -362,7 +363,7 @@ __unmarshall_int64_t(
 
         rc = xdr_cursor_extract(cursor, &tmp, 8);
 
-        if (rc < 0) return rc;
+        if (unlikely(rc < 0)) return rc;
 
         v[i] = xdr_ntoh64(tmp);
     }
@@ -370,7 +371,7 @@ __unmarshall_int64_t(
     return n << 3;
 }
 
-static inline int
+static FORCE_INLINE int
 __marshall_xdr_string(
     const xdr_string *str,
     int n,
@@ -407,7 +408,7 @@ __marshall_xdr_string(
     return len;
 }
 
-static inline int
+static FORCE_INLINE int
 __unmarshall_xdr_string(
     xdr_string *str,
     int n,
@@ -450,7 +451,7 @@ __unmarshall_xdr_string(
     return len; 
 }
 
-static inline int
+static FORCE_INLINE int
 __marshall_xdr_iovec(
     const xdr_iovec *v,
     int n,
@@ -459,7 +460,7 @@ __marshall_xdr_iovec(
     return 0;
 }
 
-static inline int
+static FORCE_INLINE int
 __unmarshall_xdr_iovec(
     xdr_iovec *v,
     int n,
