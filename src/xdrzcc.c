@@ -345,7 +345,7 @@ int main(int argc, char *argv[])
                 } else if (emit_type->array) {
                     if (emit_type->opaque) {
                         fprintf(header,"    %-39s  %s[%s];\n",
-                            "uint8_t",
+                            "xdr_iovec",
                             xdr_struct_memberp->name,
                             emit_type->array_size);
                     } else {
@@ -431,7 +431,7 @@ int main(int argc, char *argv[])
                 } else if (emit_type->array) {
                     if (emit_type->opaque) {
                         fprintf(header,"        %-34s  %s[%s];\n",
-                            "uint8_t",
+                            "xdr_iovec",
                             xdr_union_casep->name,
                             emit_type->array_size);
                     } else {

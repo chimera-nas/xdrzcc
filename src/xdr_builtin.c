@@ -451,8 +451,8 @@ __unmarshall_xdr_string(
 }
 
 static inline int
-__marshall_struct_xdr_iovec(
-    xdr_iovec *v,
+__marshall_xdr_iovec(
+    const xdr_iovec *v,
     int n,
     struct xdr_cursor *cursor)
 {
@@ -460,7 +460,7 @@ __marshall_struct_xdr_iovec(
 }
 
 static inline int
-__unmarshall_struct_xdr_iovec(
+__unmarshall_xdr_iovec(
     xdr_iovec *v,
     int n,
     struct xdr_cursor *cursor,
