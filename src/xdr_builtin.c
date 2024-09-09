@@ -1,6 +1,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef TRUE
+#define TRUE 1
+#endif
+
+#ifndef FALSE
+#define FALSE 0
+#endif
+
 #define unlikely(x)    __builtin_expect(!!(x), 0) 
 #define FORCE_INLINE __attribute__((always_inline)) inline
 

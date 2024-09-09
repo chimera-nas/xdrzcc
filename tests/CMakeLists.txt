@@ -1,4 +1,4 @@
-add_definitions(-UNDEBUG)
+add_definitions(-UNDEBUG -Wno-switch)
 
 macro(unit_test_xdrzcc name xdr_file c_file)
 
@@ -48,4 +48,4 @@ unit_test_xdrzcc(enum enum.x enum.c)
 unit_test_xdrzcc(union union.x union.c)
 unit_test_xdrzcc(nested nested.x nested.c)
 unit_test_xdrzcc(string string.x string.c)
-#unit_test_xdrzcc(rfc7863 rfc7863.x rfc7863.c)
+unit_test_xdrzcc(rfc7863 rfc7863.x rfc7863.c)

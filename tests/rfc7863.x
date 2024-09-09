@@ -58,6 +58,12 @@
 %typedef struct authsys_parms authsys_parms;
 %#endif /* _AUTH_SYS_DEFINE_FOR_NFSv42 */
 
+enum auth_flavor {
+    AUTH_NONE       = 0,
+    AUTH_SYS        = 1,
+    AUTH_SHORT      = 2
+};
+
 struct authsys_parms {
     unsigned int stamp;
     string machinename<255>;
@@ -2134,6 +2140,9 @@ struct rpcsec_gss_info {
 };
 
 /* RPCSEC_GSS has a value of "6".  See RFC 2203. */
+
+const RPCSEC_GSS = 6;
+
 union secinfo4 switch (uint32_t flavor) {
  case RPCSEC_GSS:
          rpcsec_gss_info        flavor_info;

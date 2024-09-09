@@ -244,6 +244,50 @@ int main(int argc, char *argv[])
             }
             break;
         case XDR_UNION:
+
+            xdr_unionp = xdr_identp->ptr;
+
+            if (!xdr_unionp->pivot_type->builtin) {
+
+               HASH_FIND_STR(xdr_identifiers, xdr_unionp->pivot_type->name, chk);
+
+                if (!chk) {
+                    fprintf(stderr,"union %s element %s uses  unknown type %s\n",
+                        xdr_structp->name,
+                        xdr_struct_memberp->name,
+                        xdr_struct_memberp->type->name);
+                    exit(1);
+                }
+
+                if (chk && chk->type == XDR_TYPEDEF) {
+                    xdr_unionp->pivot_type = ((struct xdr_typedef *)chk->ptr)->type;
+                }
+
+            }
+
+            DL_FOREACH(xdr_unionp->cases, xdr_union_casep) {
+
+                if (xdr_union_casep->type == NULL ||
+                    xdr_union_casep->type->builtin) {
+                    continue;
+                }
+
+    
+                HASH_FIND_STR(xdr_identifiers, xdr_union_casep->type->name, chk);
+
+                if (!chk) {
+                    fprintf(stderr,"union %s element %s uses  unknown type %s\n",
+                        xdr_structp->name,
+                        xdr_struct_memberp->name,
+                        xdr_struct_memberp->type->name);
+                    exit(1);
+                }
+
+                if (chk && chk->type == XDR_TYPEDEF) {
+                    xdr_union_casep->type = ((struct xdr_typedef *)chk->ptr)->type;
+                }
+
+            }
             break;
         default:
             abort();
@@ -415,10 +459,10 @@ int main(int argc, char *argv[])
                     continue;
                 }
 
-                HASH_FIND_STR(xdr_identifiers, xdr_union_casep->type->name, chk);
+                HASH_FIND_STR(xdr_identifiers, xdr_union_casep->type->name, chkm);
 
-                if (chk && chk->type == XDR_TYPEDEF) {
-                    emit_type = ((struct xdr_typedef*)chk->ptr)->type;
+                if (chkm && chkm->type == XDR_TYPEDEF) {
+                    emit_type = ((struct xdr_typedef*)chkm->ptr)->type;
                 } else {
                     emit_type = xdr_union_casep->type;
                 }
@@ -445,6 +489,11 @@ int main(int argc, char *argv[])
                     fprintf(header,"        %-34s  %s;\n",
                         emit_type->name,
                         xdr_union_casep->name); 
+                }
+
+                if (chkm && chkm->type == XDR_ENUM) {
+                    xdr_union_casep->type->name = "uint32_t";
+                    xdr_union_casep->type->builtin = 1;
                 }
             }
 
