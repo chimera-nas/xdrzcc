@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2024 Ben Jarvis
+ *
+ * SPDX-License-Identifier: LGPL
+ */
+
 #include <assert.h>
 
 #include "enum_xdr.h"

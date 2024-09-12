@@ -1,4 +1,12 @@
 %{
+
+/*
+ * SPDX-FileCopyrightText: 2024 Ben Jarvis
+ *
+ * SPDX-License-Identifier: LGPL
+ */
+
+
 #include "y.tab.h"
 int line_num = 1;
 int column_num = 1;

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2024 Ben Jarvis
+#
+# SPDX-License-Identifier: LGPL
+
 set(GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY ${GENERATED_DIR})
 

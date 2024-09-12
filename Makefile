@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2024 Ben Jarvis
+#
+# SPDX-License-Identifier: LGPL
+
 CMAKE_ARGS := -G Ninja
 CMAKE_ARGS_RELEASE := -DCMAKE_BUILD_TYPE=Release
 CMAKE_ARGS_DEBUG := -DCMAKE_BUILD_TYPE=Debug

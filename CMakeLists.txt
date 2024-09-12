@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2024 Ben Jarvis
+#
+# SPDX-License-Identifier: LGPL
+
 cmake_minimum_required(VERSION 3.22)
 project(xdrzcc LANGUAGES C)
 

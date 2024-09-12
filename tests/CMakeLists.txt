@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2024 Ben Jarvis
+#
+# SPDX-License-Identifier: LGPL
+
 add_definitions(-UNDEBUG -Wno-switch)
 
 macro(unit_test_xdrzcc name xdr_file c_file)
