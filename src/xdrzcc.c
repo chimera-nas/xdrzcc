@@ -8,6 +8,8 @@
 
 extern FILE *yyin;
 
+extern void yyparse();
+
 extern const char *embedded_builtin_c;
 extern const char *embedded_builtin_h;
 
@@ -684,6 +686,7 @@ int main(int argc, char *argv[])
         DL_FOREACH(xdr_unionp->cases, xdr_union_casep) {
             if (strcmp(xdr_union_casep->label,"default") == 0) {
                 fprintf(source,"    default:\n");
+                fprintf(source,"        break;\n");
             }
         }
         fprintf(source,"    };\n");
@@ -717,6 +720,7 @@ int main(int argc, char *argv[])
         DL_FOREACH(xdr_unionp->cases, xdr_union_casep) {
             if (strcmp(xdr_union_casep->label,"default") == 0) {
                 fprintf(source,"    default:\n");
+                fprintf(source,"        break;\n");
             }
         }
         fprintf(source,"    };\n");
