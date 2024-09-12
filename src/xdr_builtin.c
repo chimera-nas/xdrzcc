@@ -460,20 +460,69 @@ __unmarshall_xdr_string(
 }
 
 static FORCE_INLINE int
-__marshall_xdr_iovec(
-    const xdr_iovec *v,
-    int n,
+__marshall_opaque_fixed(
+    const xdr_iovecr *v,
+    uint32_t size,
     struct xdr_cursor *cursor)
 {
+
+    xdr_cursor_skip(cursor, size);
+
     return 0;
 }
 
 static FORCE_INLINE int
-__unmarshall_xdr_iovec(
-    xdr_iovec *v,
-    int n,
+__unmarshall_opaque_fixed(
+    xdr_iovecr *v,
+    uint32_t size,
     struct xdr_cursor *cursor,
     xdr_dbuf *dbuf)
 {
-    return 0;
+    v->length = size;
+    v->iov = cursor->cur;
+    v->niov = (cursor->last - cursor->cur) + 1;
+    v->offset = cursor->offset;
+
+    xdr_cursor_skip(cursor, v->length);
+
+    return size;
+}
+
+static FORCE_INLINE int
+__marshall_opaque_variable(
+    const xdr_iovecr *v,
+    uint32_t bound,
+    struct xdr_cursor *cursor)
+{
+    int rc;
+
+    rc = __marshall_uint32_t(&v->length, 1, cursor);
+
+    if (unlikely(rc < 0)) return rc;
+
+    xdr_cursor_skip(cursor, v->length);
+
+    return 4 + v->length;
+}
+
+static FORCE_INLINE int
+__unmarshall_opaque_variable(
+    xdr_iovecr *v,
+    uint32_t bound,
+    struct xdr_cursor *cursor,
+    xdr_dbuf *dbuf)
+{
+    int rc;
+
+    rc = __unmarshall_uint32_t(&v->length, 1, cursor, dbuf);
+
+    if (unlikely(rc < 0)) return rc;
+
+    v->iov = cursor->cur;
+    v->niov = (cursor->last - cursor->cur) + 1;
+    v->offset = cursor->offset;
+
+    xdr_cursor_skip(cursor, v->length);
+
+    return 4 + v->length;
 }

@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdint.h>
 #include <string.h>
 
@@ -5,14 +7,11 @@
 #define XDR_MAX_DBUF 4096
 #endif
 
-#ifndef xdr_string
 typedef struct {
     uint32_t len;
     char    *str;
 } xdr_string;
-#endif
 
-#ifndef xdr_dbuf
 typedef struct {
     void *buffer;
     int size;
@@ -40,7 +39,6 @@ xdr_dbuf_reset(xdr_dbuf *dbuf)
     memcpy((structp)->member.str, (istr), (ilen) + 1); \
     (dbuf)->used += (ilen) + 1; \
 }
-#endif
 
 #ifndef xdr_iovec
 typedef struct {
@@ -55,3 +53,11 @@ typedef struct {
 #define xdr_iovec_set_len(iov, len) ((iov)->iov_len = (len))
 
 #endif
+
+
+typedef struct {
+    const xdr_iovec *iov;
+    int              niov;
+    int              offset;
+    uint32_t         length;
+} xdr_iovecr;

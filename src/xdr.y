@@ -134,6 +134,7 @@ typedef:
         $$->name = $3;
         $$->type = $2;
         $$->type->vector = 1;
+        $$->type->vector_bound = NULL;
     }
     | TYPEDEF type IDENTIFIER LANGLE IDENTIFIER RANGLE
     {
@@ -250,6 +251,7 @@ struct_member:
         $$->type = $1;
         $$->name = $2;
         $$->type->vector = 1;
+        $$->type->vector_bound = NULL;
     }
     | type IDENTIFIER LBRACKET IDENTIFIER RBRACKET SEMICOLON
     {

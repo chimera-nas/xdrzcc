@@ -98,7 +98,13 @@ emit_marshall(
     const char *name,
     struct xdr_type *type)
 {
-    if (type->vector) {
+   if (type->opaque && type->array_size) {
+        fprintf(output,"    rc = __marshall_opaque_fixed(&in->%s, %s, cursor);\n",
+            name, type->array_size);
+   } else if (type->opaque) {
+        fprintf(output,"    rc = __marshall_opaque_variable(&in->%s, %s, cursor);\n",
+            name, type->vector_bound ? type->vector_bound : "0");
+    } else if (type->vector) {
         fprintf(output,"    rc = __marshall_uint32_t(&in->num_%s, 1, cursor);\n",
             name);
         fprintf(output,"    if (unlikely(rc < 0)) return rc;\n");
@@ -125,7 +131,14 @@ emit_unmarshall(
     const char *name,
     struct xdr_type *type)
 {
-    if (type->vector) {
+
+    if (type->opaque && type->array_size) {
+        fprintf(output,"    rc = __unmarshall_opaque_fixed(&out->%s, %s, cursor, dbuf);\n",
+            name, type->array_size);
+    } else if (type->opaque) {
+        fprintf(output,"    rc = __unmarshall_opaque_variable(&out->%s, %s, cursor, dbuf);\n",
+            name, type->vector_bound ? type->vector_bound : "0");
+    } else if (type->vector) {
         fprintf(output,"    rc = __unmarshall_uint32_t(&out->num_%s, 1, cursor, dbuf);\n",
             name);
         fprintf(output,"    if (unlikely(rc < 0)) return rc;\n");
@@ -380,24 +393,22 @@ int main(int argc, char *argv[])
                     emit_type = xdr_struct_memberp->type;
                 }
 
-                if (emit_type->vector) {
+                if (emit_type->opaque) {
+                    fprintf(header,"    %-39s  %s;\n",
+                            "xdr_iovecr",
+                            xdr_struct_memberp->name);
+ 
+                } else if (emit_type->vector) {
                     fprintf(header, "    %-39s  num_%s;\n",
                         "uint32_t", xdr_struct_memberp->name);
                     fprintf(header, "    %-39s *%s;\n",
                         emit_type->name,
                         xdr_struct_memberp->name);
                 } else if (emit_type->array) {
-                    if (emit_type->opaque) {
-                        fprintf(header,"    %-39s  %s[%s];\n",
-                            "xdr_iovec",
-                            xdr_struct_memberp->name,
-                            emit_type->array_size);
-                    } else {
-                        fprintf(header, "    %-39s  %s[%s];\n",
-                            emit_type->name,
-                            xdr_struct_memberp->name,
-                            emit_type->array_size);
-                    }
+                    fprintf(header, "    %-39s  %s[%s];\n",
+                        emit_type->name,
+                        xdr_struct_memberp->name,
+                        emit_type->array_size);
                 } else {
                     fprintf(header, "    %-39s  %s;\n",
                         emit_type->name, 
@@ -467,24 +478,21 @@ int main(int argc, char *argv[])
                     emit_type = xdr_union_casep->type;
                 }
 
-                if (emit_type->vector) {
+                if (emit_type->opaque) {
+                    fprintf(header,"    %-39s  %s;\n",
+                            "xdr_iovecr",
+                            xdr_union_casep->name);
+                } else if (emit_type->vector) {
                     fprintf(header,"        %-34s  num_%s;\n",
                         "uint32_t", xdr_union_casep->name);
                     fprintf(header,"        %-34s *%s;\n",
                         emit_type->name,
                         xdr_union_casep->name);
                 } else if (emit_type->array) {
-                    if (emit_type->opaque) {
-                        fprintf(header,"        %-34s  %s[%s];\n",
-                            "xdr_iovec",
-                            xdr_union_casep->name,
-                            emit_type->array_size);
-                    } else {
-                        fprintf(header, "        %-34s  %s[%s];\n",
-                            emit_type->name,
-                            xdr_union_casep->name,
-                            emit_type->array_size);
-                    }
+                    fprintf(header, "        %-34s  %s[%s];\n",
+                        emit_type->name,
+                        xdr_union_casep->name,
+                        emit_type->array_size);
                 } else {
                     fprintf(header,"        %-34s  %s;\n",
                         emit_type->name,

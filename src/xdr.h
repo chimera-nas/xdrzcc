@@ -20,10 +20,10 @@ struct xdr_type {
     char *name;
     char *array_size;
     char *vector_bound;
+    int   opaque;
     int builtin;
     int vector;
     int array;
-    int opaque;
 };
 
 struct xdr_typedef {
