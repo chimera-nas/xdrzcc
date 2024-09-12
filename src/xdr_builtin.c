@@ -76,15 +76,23 @@ xdr_ntoh64(uint64_t value)
 #endif
 }
 
-struct xdr_cursor {
+struct xdr_read_cursor {
     const xdr_iovec *cur;
     const xdr_iovec *last;
     unsigned int            offset;
 };
 
+struct xdr_write_cursor {
+    xdr_iovec *cur;
+    xdr_iovec *last;
+    const xdr_iovec *scratch_iov;
+    const xdr_iovec *scratch_last;
+    unsigned int            offset;
+};
+
 static FORCE_INLINE void
-xdr_cursor_init(
-    struct xdr_cursor *cursor,
+xdr_read_cursor_init(
+    struct xdr_read_cursor *cursor,
     const xdr_iovec *iov,
     int niov)
 {
@@ -93,9 +101,28 @@ xdr_cursor_init(
     cursor->offset = 0;
 }
 
+static FORCE_INLINE void
+xdr_write_cursor_init(
+    struct xdr_write_cursor *cursor,
+    const xdr_iovec *scratch_iov,
+    int scratch_niov,
+    xdr_iovec *out_iov,
+    int out_niov)
+{
+    cursor->scratch_iov = scratch_iov;
+    cursor->scratch_last = scratch_iov + (scratch_niov - 1);
+    cursor->cur    = out_iov;
+    cursor->last   = out_iov + (out_niov - 1);
+    cursor->offset = 0;
+
+    *cursor->cur = *cursor->scratch_iov;
+    cursor->scratch_iov++;
+
+}
+
 static inline int
-xdr_cursor_extract(
-    struct xdr_cursor *cursor,
+xdr_read_cursor_extract(
+    struct xdr_read_cursor *cursor,
     void *out,
     unsigned int bytes)
 {
@@ -137,8 +164,8 @@ xdr_cursor_extract(
 }
 
 static inline int
-xdr_cursor_append(
-    struct xdr_cursor *cursor,
+xdr_write_cursor_append(
+    struct xdr_write_cursor *cursor,
     const void *in,
     unsigned int bytes)
 {
@@ -180,8 +207,8 @@ xdr_cursor_append(
 }
 
 static inline int
-xdr_cursor_skip(
-    struct xdr_cursor *cursor,
+xdr_read_cursor_skip(
+    struct xdr_read_cursor *cursor,
     unsigned int bytes)
 {
     unsigned int done, chunk;
@@ -218,14 +245,14 @@ static FORCE_INLINE int
 __marshall_uint32_t(
     const uint32_t *v,
     int n,
-    struct xdr_cursor *cursor)
+    struct xdr_write_cursor *cursor)
 {
     uint32_t tmp;
     int i, rc;
 
     for (i = 0; i < n; ++i) {
         tmp = xdr_hton32(v[i]);
-        rc = xdr_cursor_append(cursor, &tmp, 4);
+        rc = xdr_write_cursor_append(cursor, &tmp, 4);
 
         if (unlikely(rc < 0)) return rc;
     }        
@@ -237,7 +264,7 @@ static FORCE_INLINE int
 __unmarshall_uint32_t(
     uint32_t *v,
     int n,
-    struct xdr_cursor *cursor,
+    struct xdr_read_cursor *cursor,
     xdr_dbuf *dbuf)
 {
     uint32_t tmp;
@@ -245,7 +272,7 @@ __unmarshall_uint32_t(
 
     for (i = 0; i < n; ++i) {
 
-        rc = xdr_cursor_extract(cursor, &tmp, 4);
+        rc = xdr_read_cursor_extract(cursor, &tmp, 4);
 
         if (unlikely(rc < 0)) return rc;
 
@@ -259,14 +286,14 @@ static FORCE_INLINE int
 __marshall_int32_t(
     const int32_t *v,
     int n,
-    struct xdr_cursor *cursor)
+    struct xdr_write_cursor *cursor)
 {
     int32_t tmp;
     int i, rc;
 
     for (i = 0; i < n; ++i) {
         tmp = xdr_hton32(v[i]);
-        rc = xdr_cursor_append(cursor, &tmp, 4);
+        rc = xdr_write_cursor_append(cursor, &tmp, 4);
 
         if (unlikely(rc < 0)) return rc;
     }
@@ -278,7 +305,7 @@ static FORCE_INLINE int
 __unmarshall_int32_t(
     int32_t *v,
     int n,
-    struct xdr_cursor *cursor,
+    struct xdr_read_cursor *cursor,
     xdr_dbuf *dbuf)
 {
     int32_t tmp;
@@ -286,7 +313,7 @@ __unmarshall_int32_t(
 
     for (i = 0; i < n; ++i) {
 
-        rc = xdr_cursor_extract(cursor, &tmp, 4);
+        rc = xdr_read_cursor_extract(cursor, &tmp, 4);
 
         if (unlikely(rc < 0)) return rc;
 
@@ -300,14 +327,14 @@ static FORCE_INLINE int
 __marshall_uint64_t(
     const uint64_t *v,
     int n,
-    struct xdr_cursor *cursor)
+    struct xdr_write_cursor *cursor)
 {
     uint64_t tmp;
     int i, rc;
 
     for (i = 0; i < n; ++i) {
         tmp = xdr_hton64(v[i]);
-        rc = xdr_cursor_append(cursor, &tmp, 8);
+        rc = xdr_write_cursor_append(cursor, &tmp, 8);
 
         if (unlikely(rc < 0)) return rc;
     }
@@ -319,7 +346,7 @@ static FORCE_INLINE int
 __unmarshall_uint64_t(
     uint64_t *v,
     int n,
-    struct xdr_cursor *cursor,
+    struct xdr_read_cursor *cursor,
     xdr_dbuf *dbuf)
 {
     uint64_t tmp;
@@ -327,7 +354,7 @@ __unmarshall_uint64_t(
 
     for (i = 0; i < n; ++i) {
 
-        rc = xdr_cursor_extract(cursor, &tmp, 8);
+        rc = xdr_read_cursor_extract(cursor, &tmp, 8);
 
         if (unlikely(rc < 0)) return rc;
 
@@ -341,14 +368,14 @@ static FORCE_INLINE int
 __marshall_int64_t(
     const int64_t *v,
     int n,
-    struct xdr_cursor *cursor)
+    struct xdr_write_cursor *cursor)
 {
     int64_t tmp;
     int i, rc;
 
     for (i = 0; i < n; ++i) {
         tmp = xdr_hton64(v[i]);
-        rc = xdr_cursor_append(cursor, &tmp, 8);
+        rc = xdr_write_cursor_append(cursor, &tmp, 8);
 
         if (unlikely(rc < 0)) return rc;
     }
@@ -361,7 +388,7 @@ static FORCE_INLINE int
 __unmarshall_int64_t(
     int64_t *v,
     int n,
-    struct xdr_cursor *cursor,
+    struct xdr_read_cursor *cursor,
     xdr_dbuf *dbuf)
 {
     int64_t tmp;
@@ -369,7 +396,7 @@ __unmarshall_int64_t(
 
     for (i = 0; i < n; ++i) {
 
-        rc = xdr_cursor_extract(cursor, &tmp, 8);
+        rc = xdr_read_cursor_extract(cursor, &tmp, 8);
 
         if (unlikely(rc < 0)) return rc;
 
@@ -383,7 +410,7 @@ static FORCE_INLINE int
 __marshall_xdr_string(
     const xdr_string *str,
     int n,
-    struct xdr_cursor *cursor)
+    struct xdr_write_cursor *cursor)
 {
     const uint32_t zero = 0;
     int i, rc, pad, len = 0;
@@ -396,7 +423,7 @@ __marshall_xdr_string(
 
         len += rc;
 
-        rc = xdr_cursor_append(cursor, str[i].str, str[i].len);
+        rc = xdr_write_cursor_append(cursor, str[i].str, str[i].len);
 
         len += str[i].len;
 
@@ -405,7 +432,7 @@ __marshall_xdr_string(
         pad = (4 - (len & 0x3)) & 0x3;
 
         if (pad) {
-            rc = xdr_cursor_append(cursor, &zero, pad);
+            rc = xdr_write_cursor_append(cursor, &zero, pad);
 
             if (unlikely(rc < 0)) return rc;
 
@@ -420,7 +447,7 @@ static FORCE_INLINE int
 __unmarshall_xdr_string(
     xdr_string *str,
     int n,
-    struct xdr_cursor *cursor,
+    struct xdr_read_cursor *cursor,
     xdr_dbuf *dbuf)
 {
     int i, rc, pad, len = 0;
@@ -437,7 +464,7 @@ __unmarshall_xdr_string(
 
         dbuf->used += str[i].len + 1;
 
-        rc = xdr_cursor_extract(cursor, str[i].str, str[i].len);
+        rc = xdr_read_cursor_extract(cursor, str[i].str, str[i].len);
 
         if (unlikely(rc < 0)) return rc;
 
@@ -448,7 +475,7 @@ __unmarshall_xdr_string(
         pad = (4 - (str[i].len & 0x3)) & 0x3;
 
         if (pad) {
-            rc = xdr_cursor_skip(cursor, pad);
+            rc = xdr_read_cursor_skip(cursor, pad);
 
             if (unlikely(rc < 0)) return rc;
     
@@ -463,10 +490,10 @@ static FORCE_INLINE int
 __marshall_opaque_fixed(
     const xdr_iovecr *v,
     uint32_t size,
-    struct xdr_cursor *cursor)
+    struct xdr_write_cursor *cursor)
 {
 
-    xdr_cursor_skip(cursor, size);
+    //xdr_cursor_skip(cursor, size);
 
     return 0;
 }
@@ -475,7 +502,7 @@ static FORCE_INLINE int
 __unmarshall_opaque_fixed(
     xdr_iovecr *v,
     uint32_t size,
-    struct xdr_cursor *cursor,
+    struct xdr_read_cursor *cursor,
     xdr_dbuf *dbuf)
 {
     v->length = size;
@@ -483,7 +510,7 @@ __unmarshall_opaque_fixed(
     v->niov = (cursor->last - cursor->cur) + 1;
     v->offset = cursor->offset;
 
-    xdr_cursor_skip(cursor, v->length);
+    xdr_read_cursor_skip(cursor, v->length);
 
     return size;
 }
@@ -492,7 +519,7 @@ static FORCE_INLINE int
 __marshall_opaque_variable(
     const xdr_iovecr *v,
     uint32_t bound,
-    struct xdr_cursor *cursor)
+    struct xdr_write_cursor *cursor)
 {
     int rc;
 
@@ -500,7 +527,7 @@ __marshall_opaque_variable(
 
     if (unlikely(rc < 0)) return rc;
 
-    xdr_cursor_skip(cursor, v->length);
+    //xdr_cursor_skip(cursor, v->length);
 
     return 4 + v->length;
 }
@@ -509,7 +536,7 @@ static FORCE_INLINE int
 __unmarshall_opaque_variable(
     xdr_iovecr *v,
     uint32_t bound,
-    struct xdr_cursor *cursor,
+    struct xdr_read_cursor *cursor,
     xdr_dbuf *dbuf)
 {
     int rc;
@@ -522,7 +549,7 @@ __unmarshall_opaque_variable(
     v->niov = (cursor->last - cursor->cur) + 1;
     v->offset = cursor->offset;
 
-    xdr_cursor_skip(cursor, v->length);
+    xdr_read_cursor_skip(cursor, v->length);
 
     return 4 + v->length;
 }
