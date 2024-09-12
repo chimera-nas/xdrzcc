@@ -1,0 +1,3 @@
+struct MyMsg {
+    float value;
+};

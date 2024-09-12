@@ -450,6 +450,44 @@ __unmarshall_int64_t(
 }
 
 static FORCE_INLINE int
+__marshall_float(
+    const float *v,
+    int n,
+    struct xdr_write_cursor *cursor)
+{
+    return xdr_write_cursor_append(cursor, v, n << 2);
+}
+
+static FORCE_INLINE int
+__unmarshall_float(
+    float *v,
+    int n,
+    struct xdr_read_cursor *cursor,
+    xdr_dbuf *dbuf)
+{
+    return xdr_read_cursor_extract(cursor, v, n << 2);
+}
+
+static FORCE_INLINE int
+__marshall_double(
+    const double *v,
+    int n,
+    struct xdr_write_cursor *cursor)
+{
+    return xdr_write_cursor_append(cursor, v, n << 3);
+}
+
+static FORCE_INLINE int
+__unmarshall_double(
+    double *v,
+    int n,
+    struct xdr_read_cursor *cursor,
+    xdr_dbuf *dbuf)
+{
+    return xdr_read_cursor_extract(cursor, v, n << 3);
+}
+
+static FORCE_INLINE int
 __marshall_xdr_string(
     const xdr_string *str,
     int n,
