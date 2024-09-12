@@ -8,7 +8,7 @@
 
 extern FILE *yyin;
 
-extern void yyparse();
+extern int yyparse();
 
 extern const char *embedded_builtin_c;
 extern const char *embedded_builtin_h;
