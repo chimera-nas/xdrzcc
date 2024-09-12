@@ -8,7 +8,7 @@ int main(int argc, char *argv[])
     xdr_dbuf *dbuf;
     uint8_t buffer[256];
     xdr_iovec iov_in, iov_out;
-    int rc, i;
+    int rc, i, one = 1;
 
     xdr_iovec_set_data(&iov_in, buffer);
     xdr_iovec_set_len(&iov_in, sizeof(buffer));
@@ -19,11 +19,11 @@ int main(int argc, char *argv[])
 
     dbuf = xdr_dbuf_alloc();
 
-    rc = marshall_MyMsg(&msg1, 1, &iov_in, 1, &iov_out, 1);
+    rc = marshall_MyMsg(&msg1, 1, &iov_in, 1, &iov_out, &one);
 
     assert(rc == 64);
 
-    rc = unmarshall_MyMsg(&msg2, 1, &iov_out, 1, dbuf); 
+    rc = unmarshall_MyMsg(&msg2, 1, &iov_out, one, dbuf); 
 
     assert(rc == 64);
 

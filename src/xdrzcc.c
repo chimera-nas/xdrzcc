@@ -193,7 +193,7 @@ emit_wrapper_headers(FILE *header, const char *name)
     fprintf(header,"    const xdr_iovec *iov_in,\n");
     fprintf(header,"    int niov_in,\n");
     fprintf(header,"    xdr_iovec *iov_out,\n");
-    fprintf(header,"    int niov_out);\n\n");
+    fprintf(header,"    int *niov_out);\n\n");
 
     fprintf(header,"int unmarshall_%s(\n", name);
     fprintf(header,"    %s *out,\n", name);
@@ -213,10 +213,13 @@ emit_wrappers(FILE *source, const char *name)
     fprintf(source,"    const xdr_iovec *iov_in,\n");
     fprintf(source,"    int niov_in,\n");
     fprintf(source,"    xdr_iovec *iov_out,\n");
-    fprintf(source,"    int niov_out) {\n");
+    fprintf(source,"    int *niov_out) {\n");
     fprintf(source,"    struct xdr_write_cursor cursor;\n");
-    fprintf(source,"    xdr_write_cursor_init(&cursor, iov_in, niov_in, iov_out, niov_out);\n");
-    fprintf(source,"    return __marshall_%s(out, n, &cursor);\n", name);
+    fprintf(source,"    xdr_write_cursor_init(&cursor, iov_in, niov_in, iov_out, *niov_out);\n");
+    fprintf(source,"    int rc;\n");
+    fprintf(source,"    rc = __marshall_%s(out, n, &cursor);\n", name);
+    fprintf(source,"    *niov_out = xdr_write_cursor_finish(&cursor);\n");
+    fprintf(source,"    return rc;\n");
     fprintf(source, "}\n\n");
 
     fprintf(source,"int\n");

@@ -40,6 +40,13 @@ xdr_dbuf_reset(xdr_dbuf *dbuf)
     (dbuf)->used += (ilen) + 1; \
 }
 
+#define xdr_set_ref(structp, member, iiov, iniov, ioffset, ilength) { \
+    (structp)->member.iov  = (iiov); \
+    (structp)->member.niov = (iniov); \
+    (structp)->member.offset = (ioffset); \
+    (structp)->member.length = (ilength); \
+}
+
 #ifndef xdr_iovec
 typedef struct {
     void    *iov_base;
