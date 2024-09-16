@@ -130,6 +130,7 @@ xdr_write_cursor_init(
     cursor->last   = out_iov + (out_niov - 1);
 
     xdr_iovec_set_data(cursor->cur, xdr_iovec_data(cursor->scratch_iov));
+    xdr_iovec_copy_private(cursor->cur, cursor->scratch_iov);
     xdr_iovec_set_len(cursor->cur, 0);
 
     cursor->size = xdr_iovec_len(cursor->scratch_iov);
@@ -239,6 +240,7 @@ xdr_write_cursor_append(
             cursor->cur++;
 
             xdr_iovec_set_data(cursor->cur, xdr_iovec_data(cursor->scratch_iov));
+            xdr_iovec_copy_private(cursor->cur, cursor->scratch_iov);
             xdr_iovec_set_len(cursor->cur, 0);
             cursor->size = xdr_iovec_len(cursor->scratch_iov);
             cursor->scratch_iov++;
@@ -577,6 +579,8 @@ __marshall_opaque_fixed(
     xdr_iovec *prev = cursor->cur;
     int i, rc, pad, left = v->length;
 
+    if (size == 0) return 0;
+
     if (xdr_iovec_len(cursor->cur)) {
 
         if (unlikely(cursor->cur == cursor->last)) {
@@ -614,6 +618,7 @@ __marshall_opaque_fixed(
     cursor->cur++;
 
     xdr_iovec_set_data(cursor->cur, xdr_iovec_data(prev) + xdr_iovec_len(prev));
+    xdr_iovec_copy_private(cursor->cur, prev);
     xdr_iovec_set_len(cursor->cur, 0);
 
     pad = (4 - (size & 0x3)) & 0x3;

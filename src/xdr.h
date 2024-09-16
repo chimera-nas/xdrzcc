@@ -86,3 +86,29 @@ struct xdr_union {
     struct xdr_union *next;
 
 };
+
+struct xdr_function {
+    const char *id;
+    const char *name;
+    struct xdr_type *call_type;
+    struct xdr_type *reply_type;
+    struct xdr_function *prev;
+    struct xdr_function *next;
+};
+
+struct xdr_version {
+    const char *id;
+    const char *name;
+    struct xdr_function *functions;
+    struct xdr_version *prev;
+    struct xdr_version *next;
+};
+
+
+struct xdr_program {
+    const char *id;
+    const char *name;
+    struct xdr_version *versions;
+    struct xdr_program *prev;
+    struct xdr_program *next;
+};

@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
     xdr_dbuf *dbuf;
     uint8_t buffer[256];
     xdr_iovec iov_in, iov_out;
-    int rc, i, one = 1;
+    int rc, one = 1;
 
     xdr_iovec_set_data(&iov_in, buffer);
     xdr_iovec_set_len(&iov_in, sizeof(buffer));

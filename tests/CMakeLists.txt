@@ -20,9 +20,15 @@ macro(unit_test_xdrzcc name xdr_file c_file)
     include_directories(${CMAKE_CURRENT_BINARY_DIR})
     add_executable(${name} ${c_file} ${XDR_C})
 
+    set_source_files_properties(
+        ${XDR_C} PROPERTIES COMPILE_OPTIONS -Wno-unused
+    )
+
     add_dependencies(${name} xdrzcc)
        
     add_test(NAME ${name} COMMAND ${name}) 
+
+    set_tests_properties(${name} PROPERTIES LABELS "xdrzcc")
 
 endmacro()
 

@@ -24,7 +24,12 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     add_definitions(-O3)
 endif()
 
-add_definitions(-g -Wall -Wno-unused)
+add_definitions(-g -Wall -Werror)
 
 add_subdirectory(src)
 add_subdirectory(tests)
+
+if (NOT "${CMAKE_SOURCE_DIR}" STREQUAL "${PROJECT_SOURCE_DIR}")
+    set(XDRZCC ${XDRZCC} PARENT_SCOPE)
+endif()
+

@@ -3710,7 +3710,7 @@ struct CB_COMPOUND4res {
  * BACKCHANNEL_CTL operations.
  */
 program NFS4_CALLBACK {
-        version NFS_CB {
+        version NFS_V4_CB {
                 void
                         CB_NULL(void) = 0;
                 CB_COMPOUND4res

@@ -24,6 +24,7 @@ struct xdr_union *xdr_unions = NULL;
 struct xdr_typedef *xdr_typedefs = NULL;
 struct xdr_enum *xdr_enums = NULL;
 struct xdr_const *xdr_consts = NULL;
+struct xdr_program *xdr_programs = NULL;
 
 struct xdr_buffer {
     void *data;
@@ -210,6 +211,42 @@ emit_wrapper_headers(FILE *header, const char *name)
 }
 
 void
+emit_program_header(FILE *header,
+                    struct xdr_program *program,
+                    struct xdr_version *version)
+{
+    struct xdr_function *functionp;
+ 
+    fprintf(header,"struct %s{\n", version->name);
+    fprintf(header,"    uint32_t program;\n");
+    fprintf(header,"    uint32_t version;\n");
+    fprintf(header,"    const char *name;\n");
+
+    DL_FOREACH(version->functions, functionp) {
+        fprintf(header,"   %s * (*%s)(%s *);\n",
+            functionp->reply_type->name,
+            functionp->name,
+            functionp->call_type->name);
+    }
+
+    fprintf(header,"};\n\n");
+    fprintf(header,"extern const struct %s %s;\n\n",
+            version->name, version->name);
+}
+
+void
+emit_program(FILE *source,
+             struct xdr_program *program,
+             struct xdr_version *version)
+{
+    fprintf(source,"const struct %s %s = {\n", version->name, version->name);
+    fprintf(source,"    .program = %s,\n", program->id);
+    fprintf(source,"    .version = %s,\n", version->id);
+    fprintf(source,"    .name = \"%s\",\n", version->name);
+    fprintf(source,"};\n\n");
+}
+
+void
 emit_wrappers(FILE *source, const char *name)
 {
     fprintf(source,"int\n");
@@ -251,6 +288,8 @@ int main(int argc, char *argv[])
     struct xdr_type *emit_type;
     struct xdr_enum *xdr_enump;
     struct xdr_enum_entry *xdr_enum_entryp;
+    struct xdr_program *xdr_programp;
+    struct xdr_version *xdr_versionp;
     struct xdr_const *xdr_constp;
     struct xdr_buffer *xdr_buffer;
     struct xdr_identifier *xdr_identp, *xdr_identp_tmp, *chk, *chkm;
@@ -608,6 +647,12 @@ int main(int argc, char *argv[])
         emit_wrapper_headers(header, xdr_unionp->name);
     }
 
+    DL_FOREACH(xdr_programs, xdr_programp) {
+        DL_FOREACH(xdr_programp->versions, xdr_versionp) {
+            emit_program_header(header, xdr_programp, xdr_versionp);
+        }
+    }
+
     fclose(header);
 
     source = fopen(argv[2], "w");
@@ -737,6 +782,12 @@ int main(int argc, char *argv[])
         fprintf(source,"}\n\n");
 
         emit_wrappers(source, xdr_unionp->name);
+    }
+
+    DL_FOREACH(xdr_programs, xdr_programp) {
+        DL_FOREACH(xdr_programp->versions, xdr_versionp) {
+            emit_program(source, xdr_programp, xdr_versionp);
+        }
     }
 
     fclose(source);

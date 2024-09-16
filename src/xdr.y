@@ -23,6 +23,7 @@ extern struct xdr_union *xdr_unions;
 extern struct xdr_typedef *xdr_typedefs;
 extern struct xdr_enum *xdr_enums;
 extern struct xdr_const *xdr_consts;
+extern struct xdr_program *xdr_programs;
 
 void * xdr_alloc(unsigned int size);
 
@@ -47,6 +48,9 @@ void yyerror(const char *s) {
     struct xdr_enum_entry *xdr_enum_entry;
     struct xdr_union *xdr_union;
     struct xdr_union_case *xdr_union_case;
+    struct xdr_program *xdr_program;
+    struct xdr_version *xdr_version;
+    struct xdr_function *xdr_function;
 }
 
 %token <str> IDENTIFIER NUMBER
@@ -65,6 +69,9 @@ void yyerror(const char *s) {
 %type <xdr_union> union_def
 %type <xdr_union_case> union_body case_clause
 %type <str> case_label
+%type <xdr_program> program
+%type <xdr_version> version versions
+%type <xdr_function> function functions
 
 %start xdr_file
 
@@ -110,24 +117,63 @@ xdr_def:
         xdr_add_identifier(XDR_UNION, $1->name, $1);
     }
     | program SEMICOLON
+    {
+        DL_APPEND(xdr_programs, $1);
+    }
     ;
 
 program:
     PROGRAM IDENTIFIER LBRACE versions RBRACE EQUALS NUMBER
+    {
+        $$ = xdr_alloc(sizeof(*$$));
+        $$->name = $2;
+        $$->id = $7;
+        $$->versions = $4;
+    }
 
 version:
     VERSION IDENTIFIER LBRACE functions RBRACE EQUALS NUMBER SEMICOLON
+    {
+        $$ = xdr_alloc(sizeof(*$$));
+        $$->name = $2;
+        $$->id = $7;
+        $$->functions = $4;
+    }
 
 versions:
     version
+    {
+        $$ = NULL;
+        DL_APPEND($$, $1);
+    }
     | versions version
+    {
+        $$ = $1;
+        DL_APPEND($$, $2);
+    }
 
 functions:
     function 
+    {
+        $$ = NULL;
+        DL_APPEND($$, $1);
+    }
     | functions function
+    {
+        $$ = $1;
+        DL_APPEND($$, $2);
+    
+    }
 
 function:
     type IDENTIFIER LPAREN type RPAREN EQUALS NUMBER SEMICOLON
+    {
+        $$ = xdr_alloc(sizeof(*$$));
+        $$->id = $7;
+        $$->name = $2;
+        $$->reply_type = $1;
+        $$->call_type = $4;
+    }
 
 typedef:
     TYPEDEF type IDENTIFIER

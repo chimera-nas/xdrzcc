@@ -3,7 +3,6 @@
  *
  * SPDX-License-Identifier: LGPL
  */
-
 #include <assert.h>
 
 #include "opaque_xdr.h"
@@ -35,6 +34,7 @@ int main(int argc, char *argv[])
 
     rc = marshall_MyMsg(&msg1, 1, &iov_in, 1, iov_out, &niov_out);
 
+    assert(niov_out == 3);
     assert(rc == 12);
 
     rc = unmarshall_MyMsg(&msg2, 1, iov_out, niov_out, dbuf); 

@@ -47,7 +47,12 @@ xdr_dbuf_reset(xdr_dbuf *dbuf)
     (structp)->member.length = (ilength); \
 }
 
-#ifndef xdr_iovec
+#ifdef XDR_CUSTOM_IOVEC
+#define QUOTED(x) #x
+#define TOSTRING(x) QUOTED(x)
+#include TOSTRING(XDR_CUSTOM_IOVEC)
+#else
+
 typedef struct {
     void    *iov_base;
     uint32_t iov_len;
@@ -59,8 +64,9 @@ typedef struct {
 #define xdr_iovec_set_data(iov, ptr) ((iov)->iov_base = (ptr))
 #define xdr_iovec_set_len(iov, len) ((iov)->iov_len = (len))
 
-#endif
+#define xdr_iovec_copy_private(out, in)
 
+#endif
 
 typedef struct {
     const xdr_iovec *iov;
