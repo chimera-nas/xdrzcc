@@ -23,7 +23,7 @@ int main(int argc, char *argv[])
 
     msg1.value = TWO;
 
-    rc = marshall_MyMsg(&msg1, 1, &iov_in, 1, &iov_out, &one);
+    rc = marshall_MyMsg(&msg1, 1, &iov_in, 1, &iov_out, &one, 0);
 
     assert(rc == 4);
 

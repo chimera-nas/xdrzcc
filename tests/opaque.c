@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
     assert(xdr_iovec_len(msg1.data.iov) == 7);
     assert(memcmp(xdr_iovec_data(msg1.data.iov), data, 7) == 0);
 
-    rc = marshall_MyMsg(&msg1, 1, &iov_in, 1, iov_out, &niov_out);
+    rc = marshall_MyMsg(&msg1, 1, &iov_in, 1, iov_out, &niov_out, 0);
 
     assert(niov_out == 3);
     assert(rc == 12);

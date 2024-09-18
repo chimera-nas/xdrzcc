@@ -25,7 +25,7 @@ int main(int argc, char *argv[])
     xdr_dbuf_strncpy(&msg1, string2, "1234", 4, dbuf);
     xdr_dbuf_strncpy(&msg1, string3, "123456789", 9, dbuf);
 
-    rc = marshall_MyMsg(&msg1, 1, &iov_in, 1, &iov_out, &one);
+    rc = marshall_MyMsg(&msg1, 1, &iov_in, 1, &iov_out, &one, 0);
 
     assert(rc == 36);
 

@@ -25,7 +25,7 @@ int main(int argc, char *argv[])
     msg1.inner1.value = 43;
     msg1.inner2.value = 44;
 
-    rc = marshall_MyMsg(&msg1, 1, &iov_in, 1, &iov_out, &one);
+    rc = marshall_MyMsg(&msg1, 1, &iov_in, 1, &iov_out, &one, 0);
 
     assert(rc == 12);
 

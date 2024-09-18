@@ -121,7 +121,8 @@ xdr_write_cursor_init(
     const xdr_iovec *scratch_iov,
     int scratch_niov,
     xdr_iovec *out_iov,
-    int out_niov)
+    int out_niov,
+    int out_offset)
 {
     cursor->scratch_iov = scratch_iov;
     cursor->scratch_last = scratch_iov + (scratch_niov - 1);
@@ -131,7 +132,7 @@ xdr_write_cursor_init(
 
     xdr_iovec_set_data(cursor->cur, xdr_iovec_data(cursor->scratch_iov));
     xdr_iovec_copy_private(cursor->cur, cursor->scratch_iov);
-    xdr_iovec_set_len(cursor->cur, 0);
+    xdr_iovec_set_len(cursor->cur, out_offset);
 
     cursor->size = xdr_iovec_len(cursor->scratch_iov);
 
@@ -285,6 +286,7 @@ xdr_read_cursor_skip(
 
     return bytes;
 }
+
 
 static FORCE_INLINE int
 __marshall_uint32_t(

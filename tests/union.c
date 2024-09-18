@@ -24,7 +24,7 @@ int main(int argc, char *argv[])
     msg1.opt = OPTION1;
     msg1.option1.value = 42;
 
-    rc = marshall_MyMsg(&msg1, 1, &iov_in, 1, &iov_out, &one);
+    rc = marshall_MyMsg(&msg1, 1, &iov_in, 1, &iov_out, &one, 0);
 
     assert(rc == 8);
 
@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
     msg1.opt = OPTION2;
     xdr_dbuf_strncpy(&msg1.option2, value, "1234567", 7 ,dbuf);
 
-    rc = marshall_MyMsg(&msg1, 1, &iov_in, 1, &iov_out, &one);
+    rc = marshall_MyMsg(&msg1, 1, &iov_in, 1, &iov_out, &one, 0);
 
     assert(rc == 16);
 
@@ -55,7 +55,7 @@ int main(int argc, char *argv[])
 
     msg1.opt = OPTION3;
 
-    rc = marshall_MyMsg(&msg1, 1, &iov_in, 1, &iov_out, &one);
+    rc = marshall_MyMsg(&msg1, 1, &iov_in, 1, &iov_out, &one, 0);
 
     assert(rc == 4);
 
