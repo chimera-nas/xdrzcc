@@ -40,6 +40,11 @@ xdr_dbuf_reset(xdr_dbuf *dbuf)
     (dbuf)->used += (ilen) + 1; \
 }
 
+#define xdr_set_str_static(structp, member, istr, ilen) { \
+    (structp)->member.len = (ilen); \
+    (structp)->member.str = (char *)(istr); \
+}
+
 #define xdr_set_ref(structp, member, iiov, iniov, ioffset, ilength) { \
     (structp)->member.iov  = (iiov); \
     (structp)->member.niov = (iniov); \
