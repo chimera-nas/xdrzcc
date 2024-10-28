@@ -1,25 +1,48 @@
-#pragma once
+#ifndef XDRZCC_XDR_BUILTIN_H
+#define XDRZCC_XDR_BUILTIN_H
 
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
 
 #ifndef XDR_MAX_DBUF
 #define XDR_MAX_DBUF 4096
 #endif
 
-typedef struct {
+typedef struct
+{
     uint32_t len;
-    char    *str;
+    char *str;
 } xdr_string;
 
-typedef struct {
+typedef struct
+{
     void *buffer;
     int size;
     int used;
 } xdr_dbuf;
 
-xdr_dbuf *xdr_dbuf_alloc(void);
-void xdr_dbuf_free(xdr_dbuf *dbuf);
+static inline xdr_dbuf *
+xdr_dbuf_alloc(void)
+{
+    xdr_dbuf *dbuf;
+
+    dbuf = malloc(sizeof(*dbuf));
+
+    dbuf->buffer = malloc(4096);
+
+    dbuf->used = 0;
+    dbuf->size = 4096;
+
+    return dbuf;
+}
+
+static inline void
+xdr_dbuf_free(xdr_dbuf *dbuf)
+{
+    free(dbuf->buffer);
+    free(dbuf);
+}
 
 static inline void
 xdr_dbuf_reset(xdr_dbuf *dbuf)
@@ -27,30 +50,34 @@ xdr_dbuf_reset(xdr_dbuf *dbuf)
     dbuf->used = 0;
 }
 
-#define xdr_dbuf_reserve(structp, member, num, dbuf) { \
-    (structp)->num_##member = num; \
-    (structp)->member = dbuf->buffer + dbuf->used; \
-    dbuf->used += num * sizeof(*((structp)->member)); \
-}
+#define xdr_dbuf_reserve(structp, member, num, dbuf)      \
+    {                                                     \
+        (structp)->num_##member = num;                    \
+        (structp)->member = dbuf->buffer + dbuf->used;    \
+        dbuf->used += num * sizeof(*((structp)->member)); \
+    }
 
-#define xdr_dbuf_strncpy(structp, member, istr, ilen, dbuf) { \
-    (structp)->member.len = (ilen); \
-    (structp)->member.str = (char *)(dbuf->buffer + (dbuf)->used); \
-    memcpy((structp)->member.str, (istr), (ilen) + 1); \
-    (dbuf)->used += (ilen) + 1; \
-}
+#define xdr_dbuf_strncpy(structp, member, istr, ilen, dbuf)            \
+    {                                                                  \
+        (structp)->member.len = (ilen);                                \
+        (structp)->member.str = (char *)(dbuf->buffer + (dbuf)->used); \
+        memcpy((structp)->member.str, (istr), (ilen) + 1);             \
+        (dbuf)->used += (ilen) + 1;                                    \
+    }
 
-#define xdr_set_str_static(structp, member, istr, ilen) { \
-    (structp)->member.len = (ilen); \
-    (structp)->member.str = (char *)(istr); \
-}
+#define xdr_set_str_static(structp, member, istr, ilen) \
+    {                                                   \
+        (structp)->member.len = (ilen);                 \
+        (structp)->member.str = (char *)(istr);         \
+    }
 
-#define xdr_set_ref(structp, member, iiov, iniov, ioffset, ilength) { \
-    (structp)->member.iov  = (iiov); \
-    (structp)->member.niov = (iniov); \
-    (structp)->member.offset = (ioffset); \
-    (structp)->member.length = (ilength); \
-}
+#define xdr_set_ref(structp, member, iiov, iniov, ioffset, ilength) \
+    {                                                               \
+        (structp)->member.iov = (iiov);                             \
+        (structp)->member.niov = (iniov);                           \
+        (structp)->member.offset = (ioffset);                       \
+        (structp)->member.length = (ilength);                       \
+    }
 
 #ifdef XDR_CUSTOM_IOVEC
 #define QUOTED(x) #x
@@ -58,8 +85,9 @@ xdr_dbuf_reset(xdr_dbuf *dbuf)
 #include TOSTRING(XDR_CUSTOM_IOVEC)
 #else
 
-typedef struct {
-    void    *iov_base;
+typedef struct
+{
+    void *iov_base;
     uint32_t iov_len;
 } xdr_iovec;
 
@@ -73,9 +101,12 @@ typedef struct {
 
 #endif
 
-typedef struct {
+typedef struct
+{
     const xdr_iovec *iov;
-    int              niov;
-    int              offset;
-    uint32_t         length;
+    int niov;
+    int offset;
+    uint32_t length;
 } xdr_iovecr;
+
+#endif

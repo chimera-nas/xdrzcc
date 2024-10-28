@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
-
+#include <getopt.h>
 #include "y.tab.h"
 
 #include "xdr.h"
@@ -26,7 +26,8 @@ struct xdr_enum *xdr_enums = NULL;
 struct xdr_const *xdr_consts = NULL;
 struct xdr_program *xdr_programs = NULL;
 
-struct xdr_buffer {
+struct xdr_buffer
+{
     void *data;
     unsigned int used;
     unsigned int size;
@@ -36,7 +37,8 @@ struct xdr_buffer {
 
 struct xdr_buffer *xdr_buffers = NULL;
 
-struct xdr_identifier {
+struct xdr_identifier
+{
     char *name;
     int type;
     int emitted;
@@ -54,9 +56,10 @@ xdr_alloc(unsigned int size)
 
     size += (8 - (size & 7)) & 7;
 
-    if (xdr_buffer == NULL || (xdr_buffer->size - xdr_buffer->used) < size) {
+    if (xdr_buffer == NULL || (xdr_buffer->size - xdr_buffer->used) < size)
+    {
         xdr_buffer = calloc(1, sizeof(*xdr_buffer));
-        xdr_buffer->size = 2*1024*1024;
+        xdr_buffer->size = 2 * 1024 * 1024;
         xdr_buffer->used = 0;
         xdr_buffer->data = calloc(1, xdr_buffer->size);
         DL_PREPEND(xdr_buffers, xdr_buffer);
@@ -80,15 +83,15 @@ xdr_strdup(const char *str)
     return out;
 }
 
-void
-xdr_add_identifier(int type, char *name, void *ptr)
+void xdr_add_identifier(int type, char *name, void *ptr)
 {
     struct xdr_identifier *ident;
 
     HASH_FIND_STR(xdr_identifiers, name, ident);
 
-    if (ident) {
-        fprintf(stderr,"Duplicate symbol '%s' found.\n", name);
+    if (ident)
+    {
+        fprintf(stderr, "Duplicate symbol '%s' found.\n", name);
         exit(1);
     }
 
@@ -98,186 +101,206 @@ xdr_add_identifier(int type, char *name, void *ptr)
     ident->name = name;
     ident->ptr = ptr;
 
-    HASH_ADD_STR(xdr_identifiers,  name, ident);
-
+    HASH_ADD_STR(xdr_identifiers, name, ident);
 }
-void
-emit_marshall(
+void emit_marshall(
     FILE *output,
     const char *name,
     struct xdr_type *type)
 {
-   if (type->opaque && type->array_size) {
-        fprintf(output,"    rc = __marshall_opaque_fixed(&in->%s, %s, cursor);\n",
-            name, type->array_size);
-   } else if (type->opaque) {
-        fprintf(output,"    rc = __marshall_opaque_variable(&in->%s, %s, cursor);\n",
-            name, type->vector_bound ? type->vector_bound : "0");
-    } else if (type->vector) {
-        fprintf(output,"    rc = __marshall_uint32_t(&in->num_%s, 1, cursor);\n",
-            name);
-        fprintf(output,"    if (unlikely(rc < 0)) return rc;\n");
-        fprintf(output,"    len += rc;\n");
-        fprintf(output,"    rc = __marshall_%s(in->%s, in->num_%s, cursor);\n",
-            type->name, name, name);
-    } else if (type->array) {
-
-        fprintf(output,"    rc = __marshall_%s(in->%s, %s, cursor);\n",
-            type->name, name, type->array_size);
-
-    } else {
-        fprintf(output,"    rc = __marshall_%s(&in->%s, 1, cursor);\n",
-            type->name, name);
+    if (type->opaque && type->array_size)
+    {
+        fprintf(output, "    rc = __marshall_opaque_fixed(&in->%s, %s, cursor);\n",
+                name, type->array_size);
     }
+    else if (type->opaque)
+    {
+        fprintf(output, "    rc = __marshall_opaque_variable(&in->%s, %s, cursor);\n",
+                name, type->vector_bound ? type->vector_bound : "0");
+    }
+    else if (type->vector)
+    {
+        fprintf(output, "    rc = __marshall_uint32_t(&in->num_%s, 1, cursor);\n",
+                name);
+        fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "    len += rc;\n");
+        fprintf(output, "    rc = __marshall_%s(in->%s, in->num_%s, cursor);\n",
+                type->name, name, name);
+    }
+    else if (type->array)
+    {
 
-    fprintf(output,"    if (unlikely(rc < 0)) return rc;\n");
-    fprintf(output,"    len += rc;\n");
-}
-
-void
-emit_unmarshall(
-    FILE *output,
-    const char *name,
-    struct xdr_type *type)
-{
-
-    if (type->opaque && type->array_size) {
-        fprintf(output,"    rc = __unmarshall_opaque_fixed(&out->%s, %s, cursor, dbuf);\n",
-            name, type->array_size);
-    } else if (type->opaque) {
-        fprintf(output,"    rc = __unmarshall_opaque_variable(&out->%s, %s, cursor, dbuf);\n",
-            name, type->vector_bound ? type->vector_bound : "0");
-    } else if (type->vector) {
-        fprintf(output,"    rc = __unmarshall_uint32_t(&out->num_%s, 1, cursor, dbuf);\n",
-            name);
-        fprintf(output,"    if (unlikely(rc < 0)) return rc;\n");
-        fprintf(output,"    len += rc;\n");
-
-        fprintf(output,"     xdr_dbuf_reserve(out, %s, out->num_%s, dbuf);\n",
-            name, name);
-        fprintf(output,"    rc = __unmarshall_%s(out->%s, out->num_%s, cursor, dbuf);\n",
-            type->name, name, name);
-    } else if (type->array) {
-
-        fprintf(output,"    rc = __unmarshall_%s(out->%s, %s, cursor, dbuf);\n",
-            type->name, name, type->array_size);
-
-    } else {
-        fprintf(output,"    rc = __unmarshall_%s(&out->%s, 1, cursor, dbuf);\n",
+        fprintf(output, "    rc = __marshall_%s(in->%s, %s, cursor);\n",
+                type->name, name, type->array_size);
+    }
+    else
+    {
+        fprintf(output, "    rc = __marshall_%s(&in->%s, 1, cursor);\n",
                 type->name, name);
     }
 
-    fprintf(output,"    if (unlikely(rc < 0)) return rc;\n");
-    fprintf(output,"    len += rc;\n");
-
+    fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
+    fprintf(output, "    len += rc;\n");
 }
 
-void
-emit_internal_headers(FILE *source, const char *name)
+void emit_unmarshall(
+    FILE *output,
+    const char *name,
+    struct xdr_type *type)
 {
 
-    fprintf(source,"static int\n");
-    fprintf(source,"__marshall_%s(\n", name);
-    fprintf(source,"    const %s *in,\n", name);
-    fprintf(source,"    int n,\n");
-    fprintf(source,"    struct xdr_write_cursor *cursor);\n\n");
+    if (type->opaque && type->array_size)
+    {
+        fprintf(output, "    rc = __unmarshall_opaque_fixed(&out->%s, %s, cursor, dbuf);\n",
+                name, type->array_size);
+    }
+    else if (type->opaque)
+    {
+        fprintf(output, "    rc = __unmarshall_opaque_variable(&out->%s, %s, cursor, dbuf);\n",
+                name, type->vector_bound ? type->vector_bound : "0");
+    }
+    else if (type->vector)
+    {
+        fprintf(output, "    rc = __unmarshall_uint32_t(&out->num_%s, 1, cursor, dbuf);\n",
+                name);
+        fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "    len += rc;\n");
 
-    fprintf(source,"static int\n");
-    fprintf(source,"__unmarshall_%s(\n", name);
-    fprintf(source,"    %s *out,\n", name);
-    fprintf(source,"    int n,\n");
-    fprintf(source,"    struct xdr_read_cursor *cursor,\n");
-    fprintf(source,"    xdr_dbuf *dbuf);\n\n");
+        fprintf(output, "     xdr_dbuf_reserve(out, %s, out->num_%s, dbuf);\n",
+                name, name);
+        fprintf(output, "    rc = __unmarshall_%s(out->%s, out->num_%s, cursor, dbuf);\n",
+                type->name, name, name);
+    }
+    else if (type->array)
+    {
 
-}
-
-void
-emit_wrapper_headers(FILE *header, const char *name)
-{
-    fprintf(header,"int marshall_%s(\n", name);
-    fprintf(header,"    const %s *in,\n", name);
-    fprintf(header,"    int n,\n");
-    fprintf(header,"    const xdr_iovec *iov_in,\n");
-    fprintf(header,"    int niov_in,\n");
-    fprintf(header,"    xdr_iovec *iov_out,\n");
-    fprintf(header,"    int *niov_out,\n");
-    fprintf(header,"    int out_offset);\n\n");
-
-    fprintf(header,"int unmarshall_%s(\n", name);
-    fprintf(header,"    %s *out,\n", name);
-    fprintf(header,"    int n,\n");
-    fprintf(header,"    const xdr_iovec *iov,\n");
-    fprintf(header,"    int niov,\n");
-    fprintf(header,"    xdr_dbuf *dbuf);\n\n");
-}
-
-void
-emit_program_header(FILE *header,
-                    struct xdr_program *program,
-                    struct xdr_version *version)
-{
-    struct xdr_function *functionp;
- 
-    fprintf(header,"struct %s{\n", version->name);
-    fprintf(header,"    uint32_t program;\n");
-    fprintf(header,"    uint32_t version;\n");
-    fprintf(header,"    const char *name;\n");
-
-    DL_FOREACH(version->functions, functionp) {
-        fprintf(header,"   %s * (*%s)(%s *);\n",
-            functionp->reply_type->name,
-            functionp->name,
-            functionp->call_type->name);
+        fprintf(output, "    rc = __unmarshall_%s(out->%s, %s, cursor, dbuf);\n",
+                type->name, name, type->array_size);
+    }
+    else
+    {
+        fprintf(output, "    rc = __unmarshall_%s(&out->%s, 1, cursor, dbuf);\n",
+                type->name, name);
     }
 
-    fprintf(header,"};\n\n");
-    fprintf(header,"extern const struct %s %s;\n\n",
+    fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
+    fprintf(output, "    len += rc;\n");
+}
+
+void emit_internal_headers(FILE *source, const char *name)
+{
+
+    fprintf(source, "static int\n");
+    fprintf(source, "__marshall_%s(\n", name);
+    fprintf(source, "    const %s *in,\n", name);
+    fprintf(source, "    int n,\n");
+    fprintf(source, "    struct xdr_write_cursor *cursor);\n\n");
+
+    fprintf(source, "static int\n");
+    fprintf(source, "__unmarshall_%s(\n", name);
+    fprintf(source, "    %s *out,\n", name);
+    fprintf(source, "    int n,\n");
+    fprintf(source, "    struct xdr_read_cursor *cursor,\n");
+    fprintf(source, "    xdr_dbuf *dbuf);\n\n");
+}
+
+void emit_wrapper_headers(FILE *header, const char *name)
+{
+    fprintf(header, "int marshall_%s(\n", name);
+    fprintf(header, "    const %s *in,\n", name);
+    fprintf(header, "    int n,\n");
+    fprintf(header, "    const xdr_iovec *iov_in,\n");
+    fprintf(header, "    int niov_in,\n");
+    fprintf(header, "    xdr_iovec *iov_out,\n");
+    fprintf(header, "    int *niov_out,\n");
+    fprintf(header, "    int out_offset);\n\n");
+
+    fprintf(header, "int unmarshall_%s(\n", name);
+    fprintf(header, "    %s *out,\n", name);
+    fprintf(header, "    int n,\n");
+    fprintf(header, "    const xdr_iovec *iov,\n");
+    fprintf(header, "    int niov,\n");
+    fprintf(header, "    xdr_dbuf *dbuf);\n\n");
+}
+
+void emit_program_header(FILE *header,
+                         struct xdr_program *program,
+                         struct xdr_version *version)
+{
+    struct xdr_function *functionp;
+
+    fprintf(header, "struct evpl_bvec;\n");
+    fprintf(header, "struct %s {\n", version->name);
+    fprintf(header, "    uint32_t program;\n");
+    fprintf(header, "    uint32_t version;\n");
+    fprintf(header, "    const char *name;\n");
+
+    DL_FOREACH(version->functions, functionp)
+    {
+        fprintf(header, "   void (*call_%s)(uint32_t xid, %s *);\n",
+                functionp->name,
+                functionp->call_type->name);
+
+        fprintf(header, "   void (*reply_%s)(uint32_t xid, %s *);\n",
+                functionp->name,
+                functionp->reply_type->name);
+    }
+
+    fprintf(header, "    void (*call)(uint32_t xid, uint32_t opcode, struct evpl_bvec *bvec, int niov, int length);\n");
+
+    fprintf(header, "};\n\n");
+    fprintf(header, "extern const struct %s %s;\n\n",
             version->name, version->name);
 }
 
-void
-emit_program(FILE *source,
-             struct xdr_program *program,
-             struct xdr_version *version)
+void emit_program(FILE *source,
+                  struct xdr_program *program,
+                  struct xdr_version *version)
 {
-    fprintf(source,"const struct %s %s = {\n", version->name, version->name);
-    fprintf(source,"    .program = %s,\n", program->id);
-    fprintf(source,"    .version = %s,\n", version->id);
-    fprintf(source,"    .name = \"%s\",\n", version->name);
-    fprintf(source,"};\n\n");
+    fprintf(source, "const struct %s %s = {\n", version->name, version->name);
+    fprintf(source, "    .program = %s,\n", program->id);
+    fprintf(source, "    .version = %s,\n", version->id);
+    fprintf(source, "    .name = \"%s\",\n", version->name);
+    fprintf(source, "};\n\n");
 }
 
-void
-emit_wrappers(FILE *source, const char *name)
+void emit_wrappers(FILE *source, const char *name)
 {
-    fprintf(source,"int\n");
-    fprintf(source,"marshall_%s(\n", name);
-    fprintf(source,"    const %s *out,\n", name);
-    fprintf(source,"    int n,\n");
-    fprintf(source,"    const xdr_iovec *iov_in,\n");
-    fprintf(source,"    int niov_in,\n");
-    fprintf(source,"    xdr_iovec *iov_out,\n");
-    fprintf(source,"    int *niov_out,\n");
-    fprintf(source,"    int out_offset) {\n");
-    fprintf(source,"    struct xdr_write_cursor cursor;\n");
-    fprintf(source,"    xdr_write_cursor_init(&cursor, iov_in, niov_in, iov_out, *niov_out, out_offset);\n");
-    fprintf(source,"    int rc;\n");
-    fprintf(source,"    rc = __marshall_%s(out, n, &cursor);\n", name);
-    fprintf(source,"    *niov_out = xdr_write_cursor_finish(&cursor);\n");
-    fprintf(source,"    return rc;\n");
+    fprintf(source, "int\n");
+    fprintf(source, "marshall_%s(\n", name);
+    fprintf(source, "    const %s *out,\n", name);
+    fprintf(source, "    int n,\n");
+    fprintf(source, "    const xdr_iovec *iov_in,\n");
+    fprintf(source, "    int niov_in,\n");
+    fprintf(source, "    xdr_iovec *iov_out,\n");
+    fprintf(source, "    int *niov_out,\n");
+    fprintf(source, "    int out_offset) {\n");
+    fprintf(source, "    struct xdr_write_cursor cursor;\n");
+    fprintf(source, "    xdr_write_cursor_init(&cursor, iov_in, niov_in, iov_out, *niov_out, out_offset);\n");
+    fprintf(source, "    int rc;\n");
+    fprintf(source, "    rc = __marshall_%s(out, n, &cursor);\n", name);
+    fprintf(source, "    *niov_out = xdr_write_cursor_finish(&cursor);\n");
+    fprintf(source, "    return rc;\n");
     fprintf(source, "}\n\n");
 
-    fprintf(source,"int\n");
-    fprintf(source,"unmarshall_%s(\n", name);
-    fprintf(source,"    %s *out,\n", name);
-    fprintf(source,"    int n,\n");
-    fprintf(source,"    const xdr_iovec *iov,\n");
-    fprintf(source,"    int niov,\n");
-    fprintf(source,"    xdr_dbuf *dbuf) {\n");
-    fprintf(source,"    struct xdr_read_cursor cursor;\n");
-    fprintf(source,"    xdr_read_cursor_init(&cursor, iov, niov);\n");
-    fprintf(source,"    return __unmarshall_%s(out, n, &cursor, dbuf);\n", name);
+    fprintf(source, "int\n");
+    fprintf(source, "unmarshall_%s(\n", name);
+    fprintf(source, "    %s *out,\n", name);
+    fprintf(source, "    int n,\n");
+    fprintf(source, "    const xdr_iovec *iov,\n");
+    fprintf(source, "    int niov,\n");
+    fprintf(source, "    xdr_dbuf *dbuf) {\n");
+    fprintf(source, "    struct xdr_read_cursor cursor;\n");
+    fprintf(source, "    xdr_read_cursor_init(&cursor, iov, niov);\n");
+    fprintf(source, "    return __unmarshall_%s(out, n, &cursor, dbuf);\n", name);
     fprintf(source, "}\n\n");
+}
+
+void print_usage(const char *prog_name)
+{
+    fprintf(stderr, "Usage: %s <input.x> <output.c> <output.h>\n", prog_name);
+    fprintf(stderr, "Options:\n");
+    fprintf(stderr, "  -h            Display this help message and exit\n");
 }
 
 int main(int argc, char *argv[])
@@ -295,19 +318,46 @@ int main(int argc, char *argv[])
     struct xdr_const *xdr_constp;
     struct xdr_buffer *xdr_buffer;
     struct xdr_identifier *xdr_identp, *xdr_identp_tmp, *chk, *chkm;
-    int unemitted, ready;
+    int unemitted, ready, emit_rpc2 = 0;
     FILE *header, *source;
+    const char *input_file;
+    const char *output_c;
+    const char *output_h;
+    int opt;
 
-    if (argc < 4) {
-        fprintf(stderr,"%s <input.x> <output.c> <output.h>\n", argv[0]);
+    while ((opt = getopt(argc, argv, "hr")) != -1)
+    {
+        switch (opt)
+        {
+        case 'h':
+            print_usage(argv[0]);
+            return 0;
+        case 'r':
+            emit_rpc2 = 1;
+            break;
+        default:
+            print_usage(argv[0]);
+            return 1;
+        }
+    }
+
+    if (argc - optind < 3)
+    {
+        fprintf(stderr, "Error: Missing required arguments.\n");
+        print_usage(argv[0]);
         return 1;
     }
 
-    yyin = fopen(argv[1], "r");
+    input_file = argv[optind];
+    output_c = argv[optind + 1];
+    output_h = argv[optind + 2];
 
-    if (!yyin) {
-        fprintf(stderr,"Failed to open input file %s: %s\n",
-                argv[1], strerror(errno));
+    yyin = fopen(input_file, "r");
+
+    if (!yyin)
+    {
+        fprintf(stderr, "Failed to open input file %s: %s\n",
+                input_file, strerror(errno));
         return 1;
     }
 
@@ -315,28 +365,33 @@ int main(int argc, char *argv[])
 
     fclose(yyin);
 
-    HASH_ITER(hh, xdr_identifiers, xdr_identp, xdr_identp_tmp) {
-        switch(xdr_identp->type) {
+    HASH_ITER(hh, xdr_identifiers, xdr_identp, xdr_identp_tmp)
+    {
+        switch (xdr_identp->type)
+        {
         case XDR_TYPEDEF:
             xdr_typedefp = xdr_identp->ptr;
-           
+
             /* Verify typedef refers to a legit type, and if the type
              * it refers to is itself a typedef, resolve it to the
              * type pointed to by that typedef directly
              */
- 
-            while (xdr_typedefp->type->builtin == 0) {
+
+            while (xdr_typedefp->type->builtin == 0)
+            {
 
                 HASH_FIND_STR(xdr_identifiers, xdr_typedefp->type->name, chk);
 
-                if (!chk) {
-                    fprintf(stderr,"typedef %s uses unknown type %s\n",
-                        xdr_typedefp->name,
-                        xdr_typedefp->type->name);
+                if (!chk)
+                {
+                    fprintf(stderr, "typedef %s uses unknown type %s\n",
+                            xdr_typedefp->name,
+                            xdr_typedefp->type->name);
                     exit(1);
                 }
 
-                if (chk->type != XDR_TYPEDEF) {
+                if (chk->type != XDR_TYPEDEF)
+                {
                     break;
                 }
 
@@ -354,71 +409,78 @@ int main(int argc, char *argv[])
         case XDR_STRUCT:
             xdr_structp = xdr_identp->ptr;
 
-            DL_FOREACH(xdr_structp->members, xdr_struct_memberp) {
-                if (xdr_struct_memberp->type->builtin) {
+            DL_FOREACH(xdr_structp->members, xdr_struct_memberp)
+            {
+                if (xdr_struct_memberp->type->builtin)
+                {
                     continue;
                 }
 
                 HASH_FIND_STR(xdr_identifiers, xdr_struct_memberp->type->name, chk);
 
-                if (!chk) {
-                    fprintf(stderr,"struct %s element %s uses  unknown type %s\n",
-                        xdr_structp->name,
-                        xdr_struct_memberp->name,
-                        xdr_struct_memberp->type->name);
+                if (!chk)
+                {
+                    fprintf(stderr, "struct %s element %s uses  unknown type %s\n",
+                            xdr_structp->name,
+                            xdr_struct_memberp->name,
+                            xdr_struct_memberp->type->name);
                     exit(1);
                 }
 
-                if (chk && chk->type == XDR_TYPEDEF) {
+                if (chk && chk->type == XDR_TYPEDEF)
+                {
                     xdr_struct_memberp->type = ((struct xdr_typedef *)chk->ptr)->type;
                 }
-
             }
             break;
         case XDR_UNION:
 
             xdr_unionp = xdr_identp->ptr;
 
-            if (!xdr_unionp->pivot_type->builtin) {
+            if (!xdr_unionp->pivot_type->builtin)
+            {
 
-               HASH_FIND_STR(xdr_identifiers, xdr_unionp->pivot_type->name, chk);
+                HASH_FIND_STR(xdr_identifiers, xdr_unionp->pivot_type->name, chk);
 
-                if (!chk) {
-                    fprintf(stderr,"union %s element %s uses  unknown type %s\n",
-                        xdr_structp->name,
-                        xdr_struct_memberp->name,
-                        xdr_struct_memberp->type->name);
+                if (!chk)
+                {
+                    fprintf(stderr, "union %s element %s uses  unknown type %s\n",
+                            xdr_structp->name,
+                            xdr_struct_memberp->name,
+                            xdr_struct_memberp->type->name);
                     exit(1);
                 }
 
-                if (chk && chk->type == XDR_TYPEDEF) {
+                if (chk && chk->type == XDR_TYPEDEF)
+                {
                     xdr_unionp->pivot_type = ((struct xdr_typedef *)chk->ptr)->type;
                 }
-
             }
 
-            DL_FOREACH(xdr_unionp->cases, xdr_union_casep) {
+            DL_FOREACH(xdr_unionp->cases, xdr_union_casep)
+            {
 
                 if (xdr_union_casep->type == NULL ||
-                    xdr_union_casep->type->builtin) {
+                    xdr_union_casep->type->builtin)
+                {
                     continue;
                 }
 
-    
                 HASH_FIND_STR(xdr_identifiers, xdr_union_casep->type->name, chk);
 
-                if (!chk) {
-                    fprintf(stderr,"union %s element %s uses  unknown type %s\n",
-                        xdr_structp->name,
-                        xdr_struct_memberp->name,
-                        xdr_struct_memberp->type->name);
+                if (!chk)
+                {
+                    fprintf(stderr, "union %s element %s uses  unknown type %s\n",
+                            xdr_structp->name,
+                            xdr_struct_memberp->name,
+                            xdr_struct_memberp->type->name);
                     exit(1);
                 }
 
-                if (chk && chk->type == XDR_TYPEDEF) {
+                if (chk && chk->type == XDR_TYPEDEF)
+                {
                     xdr_union_casep->type = ((struct xdr_typedef *)chk->ptr)->type;
                 }
-
             }
             break;
         default:
@@ -426,11 +488,12 @@ int main(int argc, char *argv[])
         }
     }
 
-    header = fopen(argv[3], "w");
+    header = fopen(output_h, "w");
 
-    if (!header) {
-        fprintf(stderr,"Failed to open output header file%s: %s\n",
-                argv[3], strerror(errno));
+    if (!header)
+    {
+        fprintf(stderr, "Failed to open output header file%s: %s\n",
+                output_h, strerror(errno));
         return 1;
     }
 
@@ -438,143 +501,169 @@ int main(int argc, char *argv[])
 
     fprintf(header, "\n");
 
-    DL_FOREACH(xdr_consts, xdr_constp) {
-        fprintf(header,"#define %-60s %s\n", xdr_constp->name, xdr_constp->value);
-    }
-
-    fprintf(header,"\n");
-
-    DL_FOREACH(xdr_structs, xdr_structp) {
-        fprintf(header,"typedef struct %s %s;\n", xdr_structp->name, xdr_structp->name);
-    }
-    
-    fprintf(header,"\n");
-
-    DL_FOREACH(xdr_unions, xdr_unionp) {
-        fprintf(header,"typedef struct %s %s;\n", xdr_unionp->name, xdr_unionp->name);
+    DL_FOREACH(xdr_consts, xdr_constp)
+    {
+        fprintf(header, "#define %-60s %s\n", xdr_constp->name, xdr_constp->value);
     }
 
     fprintf(header, "\n");
 
-    DL_FOREACH(xdr_enums, xdr_enump) {
-        fprintf(header, "typedef enum {\n");
-
-        DL_FOREACH(xdr_enump->entries, xdr_enum_entryp) {
-            fprintf(header,"   %-60s = %s,\n",
-                xdr_enum_entryp->name,
-                xdr_enum_entryp->value);
-        }
-
-        fprintf(header,"} %s;\n\n", xdr_enump->name);
-
+    DL_FOREACH(xdr_structs, xdr_structp)
+    {
+        fprintf(header, "typedef struct %s %s;\n", xdr_structp->name, xdr_structp->name);
     }
 
-    fprintf(header,"\n");
+    fprintf(header, "\n");
 
-    do {
+    DL_FOREACH(xdr_unions, xdr_unionp)
+    {
+        fprintf(header, "typedef struct %s %s;\n", xdr_unionp->name, xdr_unionp->name);
+    }
+
+    fprintf(header, "\n");
+
+    DL_FOREACH(xdr_enums, xdr_enump)
+    {
+        fprintf(header, "typedef enum {\n");
+
+        DL_FOREACH(xdr_enump->entries, xdr_enum_entryp)
+        {
+            fprintf(header, "   %-60s = %s,\n",
+                    xdr_enum_entryp->name,
+                    xdr_enum_entryp->value);
+        }
+
+        fprintf(header, "} %s;\n\n", xdr_enump->name);
+    }
+
+    fprintf(header, "\n");
+
+    do
+    {
         unemitted = 0;
 
-        DL_FOREACH(xdr_structs, xdr_structp) {
+        DL_FOREACH(xdr_structs, xdr_structp)
+        {
 
             HASH_FIND_STR(xdr_identifiers, xdr_structp->name, chk);
-        
-            if (chk->emitted) continue;
+
+            if (chk->emitted)
+                continue;
 
             ready = 1;
 
-            DL_FOREACH(xdr_structp->members, xdr_struct_memberp) {
-                if (xdr_struct_memberp->type->builtin) {
+            DL_FOREACH(xdr_structp->members, xdr_struct_memberp)
+            {
+                if (xdr_struct_memberp->type->builtin)
+                {
                     continue;
                 }
 
                 HASH_FIND_STR(xdr_identifiers, xdr_struct_memberp->type->name, chkm);
 
-                if (chk != chkm && !chkm->emitted) {
+                if (chk != chkm && !chkm->emitted)
+                {
                     ready = 0;
                     break;
                 }
             }
 
-            if (!ready) {
+            if (!ready)
+            {
                 unemitted = 1;
                 continue;
             }
 
-            fprintf(header,"struct %s {\n", xdr_structp->name);
+            fprintf(header, "struct %s {\n", xdr_structp->name);
 
-            DL_FOREACH(xdr_structp->members, xdr_struct_memberp) {
+            DL_FOREACH(xdr_structp->members, xdr_struct_memberp)
+            {
 
                 HASH_FIND_STR(xdr_identifiers, xdr_struct_memberp->type->name, chk);
 
-                if (chk && chk->type == XDR_TYPEDEF) {
-                    emit_type = ((struct xdr_typedef*)chk->ptr)->type;
-                } else {
+                if (chk && chk->type == XDR_TYPEDEF)
+                {
+                    emit_type = ((struct xdr_typedef *)chk->ptr)->type;
+                }
+                else
+                {
                     emit_type = xdr_struct_memberp->type;
                 }
 
-                if (emit_type->opaque) {
-                    fprintf(header,"    %-39s  %s;\n",
+                if (emit_type->opaque)
+                {
+                    fprintf(header, "    %-39s  %s;\n",
                             "xdr_iovecr",
                             xdr_struct_memberp->name);
- 
-                } else if (emit_type->vector) {
+                }
+                else if (emit_type->vector)
+                {
                     fprintf(header, "    %-39s  num_%s;\n",
-                        "uint32_t", xdr_struct_memberp->name);
+                            "uint32_t", xdr_struct_memberp->name);
                     fprintf(header, "    %-39s *%s;\n",
-                        emit_type->name,
-                        xdr_struct_memberp->name);
-                } else if (emit_type->array) {
+                            emit_type->name,
+                            xdr_struct_memberp->name);
+                }
+                else if (emit_type->array)
+                {
                     fprintf(header, "    %-39s  %s[%s];\n",
-                        emit_type->name,
-                        xdr_struct_memberp->name,
-                        emit_type->array_size);
-                } else {
+                            emit_type->name,
+                            xdr_struct_memberp->name,
+                            emit_type->array_size);
+                }
+                else
+                {
                     fprintf(header, "    %-39s  %s;\n",
-                        emit_type->name, 
-                        xdr_struct_memberp->name);
+                            emit_type->name,
+                            xdr_struct_memberp->name);
                 }
 
-                if (chk && chk->type == XDR_ENUM) {
+                if (chk && chk->type == XDR_ENUM)
+                {
                     /* Now that we've emitted the struct member,
-                     * treat this as a builtin uint32 for 
+                     * treat this as a builtin uint32 for
                      * the purpose of marshall/unmarshall
                      */
                     xdr_struct_memberp->type->name = "uint32_t";
                     xdr_struct_memberp->type->builtin = 1;
                 }
-
             }
-            fprintf(header,"};\n\n");
+            fprintf(header, "};\n\n");
 
             HASH_FIND_STR(xdr_identifiers, xdr_structp->name, chk);
 
             chk->emitted = 1;
-
         }
 
-        DL_FOREACH(xdr_unions, xdr_unionp) {
+        DL_FOREACH(xdr_unions, xdr_unionp)
+        {
 
             HASH_FIND_STR(xdr_identifiers, xdr_unionp->name, chk);
 
-            if (chk->emitted) continue;
+            if (chk->emitted)
+                continue;
 
             ready = 1;
 
-            DL_FOREACH(xdr_unionp->cases, xdr_union_casep) {
+            DL_FOREACH(xdr_unionp->cases, xdr_union_casep)
+            {
                 if (!xdr_union_casep->type ||
-                    xdr_union_casep->type->builtin) {
+                    xdr_union_casep->type->builtin)
+                {
                     continue;
                 }
 
                 HASH_FIND_STR(xdr_identifiers, xdr_union_casep->type->name, chk);
 
-                if (!chk->emitted) {
+                if (!chk->emitted)
+                {
                     ready = 0;
                     break;
                 }
             }
 
-            if (!ready) {
+            if (!ready)
+            {
                 unemitted = 1;
                 continue;
             }
@@ -583,42 +672,55 @@ int main(int argc, char *argv[])
             fprintf(header, "    %-39s %s;\n", xdr_unionp->pivot_type->name, xdr_unionp->pivot_name);
             fprintf(header, "    union {\n");
 
-            DL_FOREACH(xdr_unionp->cases, xdr_union_casep) {
+            DL_FOREACH(xdr_unionp->cases, xdr_union_casep)
+            {
 
-                if (!xdr_union_casep->type) {
+                if (!xdr_union_casep->type)
+                {
                     continue;
                 }
 
                 HASH_FIND_STR(xdr_identifiers, xdr_union_casep->type->name, chkm);
 
-                if (chkm && chkm->type == XDR_TYPEDEF) {
-                    emit_type = ((struct xdr_typedef*)chkm->ptr)->type;
-                } else {
+                if (chkm && chkm->type == XDR_TYPEDEF)
+                {
+                    emit_type = ((struct xdr_typedef *)chkm->ptr)->type;
+                }
+                else
+                {
                     emit_type = xdr_union_casep->type;
                 }
 
-                if (emit_type->opaque) {
-                    fprintf(header,"    %-39s  %s;\n",
+                if (emit_type->opaque)
+                {
+                    fprintf(header, "    %-39s  %s;\n",
                             "xdr_iovecr",
                             xdr_union_casep->name);
-                } else if (emit_type->vector) {
-                    fprintf(header,"        %-34s  num_%s;\n",
-                        "uint32_t", xdr_union_casep->name);
-                    fprintf(header,"        %-34s *%s;\n",
-                        emit_type->name,
-                        xdr_union_casep->name);
-                } else if (emit_type->array) {
+                }
+                else if (emit_type->vector)
+                {
+                    fprintf(header, "        %-34s  num_%s;\n",
+                            "uint32_t", xdr_union_casep->name);
+                    fprintf(header, "        %-34s *%s;\n",
+                            emit_type->name,
+                            xdr_union_casep->name);
+                }
+                else if (emit_type->array)
+                {
                     fprintf(header, "        %-34s  %s[%s];\n",
-                        emit_type->name,
-                        xdr_union_casep->name,
-                        emit_type->array_size);
-                } else {
-                    fprintf(header,"        %-34s  %s;\n",
-                        emit_type->name,
-                        xdr_union_casep->name); 
+                            emit_type->name,
+                            xdr_union_casep->name,
+                            emit_type->array_size);
+                }
+                else
+                {
+                    fprintf(header, "        %-34s  %s;\n",
+                            emit_type->name,
+                            xdr_union_casep->name);
                 }
 
-                if (chkm && chkm->type == XDR_ENUM) {
+                if (chkm && chkm->type == XDR_ENUM)
+                {
                     xdr_union_casep->type->name = "uint32_t";
                     xdr_union_casep->type->builtin = 1;
                 }
@@ -626,13 +728,14 @@ int main(int argc, char *argv[])
 
             HASH_FIND_STR(xdr_identifiers, xdr_unionp->pivot_type->name, chkm);
 
-            if (chkm && chkm->type == XDR_ENUM) {
+            if (chkm && chkm->type == XDR_ENUM)
+            {
                 xdr_unionp->pivot_type->name = "uint32_t";
                 xdr_unionp->pivot_type->builtin = 1;
             }
 
-            fprintf(header,"    };\n");
-            fprintf(header,"};\n\n");
+            fprintf(header, "    };\n");
+            fprintf(header, "};\n\n");
 
             HASH_FIND_STR(xdr_identifiers, xdr_unionp->name, chk);
 
@@ -641,154 +744,187 @@ int main(int argc, char *argv[])
 
     } while (unemitted);
 
-    DL_FOREACH(xdr_structs, xdr_structp) {
+    DL_FOREACH(xdr_structs, xdr_structp)
+    {
         emit_wrapper_headers(header, xdr_structp->name);
     }
 
-    DL_FOREACH(xdr_unions, xdr_unionp) {
+    DL_FOREACH(xdr_unions, xdr_unionp)
+    {
         emit_wrapper_headers(header, xdr_unionp->name);
     }
 
-    DL_FOREACH(xdr_programs, xdr_programp) {
-        DL_FOREACH(xdr_programp->versions, xdr_versionp) {
-            emit_program_header(header, xdr_programp, xdr_versionp);
+    if (emit_rpc2)
+    {
+        DL_FOREACH(xdr_programs, xdr_programp)
+        {
+            DL_FOREACH(xdr_programp->versions, xdr_versionp)
+            {
+                emit_program_header(header, xdr_programp, xdr_versionp);
+            }
         }
     }
 
     fclose(header);
 
-    source = fopen(argv[2], "w");
+    source = fopen(output_c, "w");
 
-    if (!source) {
-        fprintf(stderr,"Failed to open output source file %s: %s\n",
-                argv[2], strerror(errno));
+    if (!source)
+    {
+        fprintf(stderr, "Failed to open output source file %s: %s\n",
+                output_c, strerror(errno));
         return 1;
     }
 
-    fprintf(source,"#include \"%s\"\n", argv[3]);
+    fprintf(source, "#include \"%s\"\n", output_h);
 
-    fprintf(source,"\n");
+    fprintf(source, "\n");
 
-    fprintf(source,"%s", embedded_builtin_c);
+    fprintf(source, "%s", embedded_builtin_c);
 
-    fprintf(source,"\n");
+    fprintf(source, "\n");
 
-    DL_FOREACH(xdr_structs, xdr_structp) {
+    DL_FOREACH(xdr_structs, xdr_structp)
+    {
         emit_internal_headers(source, xdr_structp->name);
     }
 
-    DL_FOREACH(xdr_unions, xdr_unionp) {
+    DL_FOREACH(xdr_unions, xdr_unionp)
+    {
         emit_internal_headers(source, xdr_unionp->name);
     }
 
-    DL_FOREACH(xdr_structs, xdr_structp) {
+    DL_FOREACH(xdr_structs, xdr_structp)
+    {
 
-        fprintf(source,"static int\n");
-        fprintf(source,"__marshall_%s(\n", xdr_structp->name);
-        fprintf(source,"    const %s *in,\n", xdr_structp->name);
-        fprintf(source,"    int n,\n");
-        fprintf(source,"    struct xdr_write_cursor *cursor) {\n");
-        fprintf(source,"    int rc, len = 0;\n");
+        fprintf(source, "static int\n");
+        fprintf(source, "__marshall_%s(\n", xdr_structp->name);
+        fprintf(source, "    const %s *in,\n", xdr_structp->name);
+        fprintf(source, "    int n,\n");
+        fprintf(source, "    struct xdr_write_cursor *cursor) {\n");
+        fprintf(source, "    int rc, len = 0;\n");
 
-        DL_FOREACH(xdr_structp->members, xdr_struct_memberp) {
+        DL_FOREACH(xdr_structp->members, xdr_struct_memberp)
+        {
             emit_marshall(source, xdr_struct_memberp->name, xdr_struct_memberp->type);
         }
 
-        fprintf(source,"    return len;\n");
+        fprintf(source, "    return len;\n");
         fprintf(source, "}\n\n");
 
-        fprintf(source,"static int\n");
-        fprintf(source,"__unmarshall_%s(\n", xdr_structp->name);
-        fprintf(source,"    %s *out,\n", xdr_structp->name);
-        fprintf(source,"    int n,\n");
-        fprintf(source,"    struct xdr_read_cursor *cursor,\n");
-        fprintf(source,"    xdr_dbuf *dbuf) {\n");
-        fprintf(source,"    int rc, len = 0;\n");
+        fprintf(source, "static int\n");
+        fprintf(source, "__unmarshall_%s(\n", xdr_structp->name);
+        fprintf(source, "    %s *out,\n", xdr_structp->name);
+        fprintf(source, "    int n,\n");
+        fprintf(source, "    struct xdr_read_cursor *cursor,\n");
+        fprintf(source, "    xdr_dbuf *dbuf) {\n");
+        fprintf(source, "    int rc, len = 0;\n");
 
-        DL_FOREACH(xdr_structp->members, xdr_struct_memberp) {
+        DL_FOREACH(xdr_structp->members, xdr_struct_memberp)
+        {
             emit_unmarshall(source, xdr_struct_memberp->name, xdr_struct_memberp->type);
         }
 
-        fprintf(source,"    return len;\n");
+        fprintf(source, "    return len;\n");
         fprintf(source, "}\n\n");
 
         emit_wrappers(source, xdr_structp->name);
-    } 
+    }
 
-    DL_FOREACH(xdr_unions, xdr_unionp) {
-        fprintf(source,"static int\n");
-        fprintf(source,"__marshall_%s(\n", xdr_unionp->name);
-        fprintf(source,"    const %s *in,\n", xdr_unionp->name);
-        fprintf(source,"    int n,\n");
-        fprintf(source,"    struct xdr_write_cursor *cursor) {\n");
-        fprintf(source,"    int rc, len = 0;\n");
+    DL_FOREACH(xdr_unions, xdr_unionp)
+    {
+        fprintf(source, "static int\n");
+        fprintf(source, "__marshall_%s(\n", xdr_unionp->name);
+        fprintf(source, "    const %s *in,\n", xdr_unionp->name);
+        fprintf(source, "    int n,\n");
+        fprintf(source, "    struct xdr_write_cursor *cursor) {\n");
+        fprintf(source, "    int rc, len = 0;\n");
 
         emit_marshall(source, xdr_unionp->pivot_name, xdr_unionp->pivot_type);
 
-        fprintf(source,"    switch (in->%s) {\n", xdr_unionp->pivot_name);
+        fprintf(source, "    switch (in->%s) {\n", xdr_unionp->pivot_name);
 
-        DL_FOREACH(xdr_unionp->cases, xdr_union_casep) {
-            if (strcmp(xdr_union_casep->label,"default") != 0) {
-                fprintf(source,"    case %s:\n", xdr_union_casep->label);
-                if (xdr_union_casep->voided) {
-                    fprintf(source,"        break;\n");
-                } else if (xdr_union_casep->type) {
+        DL_FOREACH(xdr_unionp->cases, xdr_union_casep)
+        {
+            if (strcmp(xdr_union_casep->label, "default") != 0)
+            {
+                fprintf(source, "    case %s:\n", xdr_union_casep->label);
+                if (xdr_union_casep->voided)
+                {
+                    fprintf(source, "        break;\n");
+                }
+                else if (xdr_union_casep->type)
+                {
                     emit_marshall(source, xdr_union_casep->name, xdr_union_casep->type);
-                    fprintf(source,"        break;\n");
+                    fprintf(source, "        break;\n");
                 }
             }
         }
 
-        DL_FOREACH(xdr_unionp->cases, xdr_union_casep) {
-            if (strcmp(xdr_union_casep->label,"default") == 0) {
-                fprintf(source,"    default:\n");
-                fprintf(source,"        break;\n");
+        DL_FOREACH(xdr_unionp->cases, xdr_union_casep)
+        {
+            if (strcmp(xdr_union_casep->label, "default") == 0)
+            {
+                fprintf(source, "    default:\n");
+                fprintf(source, "        break;\n");
             }
         }
-        fprintf(source,"    };\n");
-        fprintf(source,"    return len;\n");
-        fprintf(source,"}\n\n");
+        fprintf(source, "    };\n");
+        fprintf(source, "    return len;\n");
+        fprintf(source, "}\n\n");
 
-        fprintf(source,"static int\n");
-        fprintf(source,"__unmarshall_%s(\n", xdr_unionp->name);
-        fprintf(source,"    %s *out,\n", xdr_unionp->name);
-        fprintf(source,"    int n,\n");
-        fprintf(source,"    struct xdr_read_cursor *cursor,\n");
-        fprintf(source,"    xdr_dbuf *dbuf) {\n");
-        fprintf(source,"    int rc, len = 0;\n");
+        fprintf(source, "static int\n");
+        fprintf(source, "__unmarshall_%s(\n", xdr_unionp->name);
+        fprintf(source, "    %s *out,\n", xdr_unionp->name);
+        fprintf(source, "    int n,\n");
+        fprintf(source, "    struct xdr_read_cursor *cursor,\n");
+        fprintf(source, "    xdr_dbuf *dbuf) {\n");
+        fprintf(source, "    int rc, len = 0;\n");
 
         emit_unmarshall(source, xdr_unionp->pivot_name, xdr_unionp->pivot_type);
 
-        fprintf(source,"    switch (out->%s) {\n", xdr_unionp->pivot_name);
+        fprintf(source, "    switch (out->%s) {\n", xdr_unionp->pivot_name);
 
-        DL_FOREACH(xdr_unionp->cases, xdr_union_casep) {
-            if (strcmp(xdr_union_casep->label,"default") != 0) {
-                fprintf(source,"    case %s:\n", xdr_union_casep->label);
-                if (xdr_union_casep->voided) {
-                    fprintf(source,"        break;\n");
-                } else if (xdr_union_casep->type) {
+        DL_FOREACH(xdr_unionp->cases, xdr_union_casep)
+        {
+            if (strcmp(xdr_union_casep->label, "default") != 0)
+            {
+                fprintf(source, "    case %s:\n", xdr_union_casep->label);
+                if (xdr_union_casep->voided)
+                {
+                    fprintf(source, "        break;\n");
+                }
+                else if (xdr_union_casep->type)
+                {
                     emit_unmarshall(source, xdr_union_casep->name, xdr_union_casep->type);
-                    fprintf(source,"        break;\n");
+                    fprintf(source, "        break;\n");
                 }
             }
         }
 
-        DL_FOREACH(xdr_unionp->cases, xdr_union_casep) {
-            if (strcmp(xdr_union_casep->label,"default") == 0) {
-                fprintf(source,"    default:\n");
-                fprintf(source,"        break;\n");
+        DL_FOREACH(xdr_unionp->cases, xdr_union_casep)
+        {
+            if (strcmp(xdr_union_casep->label, "default") == 0)
+            {
+                fprintf(source, "    default:\n");
+                fprintf(source, "        break;\n");
             }
         }
-        fprintf(source,"    };\n");
-        fprintf(source,"    return len;\n");
-        fprintf(source,"}\n\n");
+        fprintf(source, "    };\n");
+        fprintf(source, "    return len;\n");
+        fprintf(source, "}\n\n");
 
         emit_wrappers(source, xdr_unionp->name);
     }
 
-    DL_FOREACH(xdr_programs, xdr_programp) {
-        DL_FOREACH(xdr_programp->versions, xdr_versionp) {
-            emit_program(source, xdr_programp, xdr_versionp);
+    if (emit_rpc2)
+    {
+        DL_FOREACH(xdr_programs, xdr_programp)
+        {
+            DL_FOREACH(xdr_programp->versions, xdr_versionp)
+            {
+                emit_program(source, xdr_programp, xdr_versionp);
+            }
         }
     }
 
@@ -796,7 +932,8 @@ int main(int argc, char *argv[])
 
     HASH_CLEAR(hh, xdr_identifiers);
 
-    while (xdr_buffers) {
+    while (xdr_buffers)
+    {
         xdr_buffer = xdr_buffers;
         DL_DELETE(xdr_buffers, xdr_buffer);
 
