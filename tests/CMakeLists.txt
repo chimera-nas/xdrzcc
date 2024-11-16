@@ -26,29 +26,31 @@ macro(unit_test_xdrzcc name xdr_file c_file)
 
     add_dependencies(${name} xdrzcc)
        
-    add_test(NAME ${name} COMMAND ${name}) 
+    add_test(NAME xdrzcc/${name} COMMAND ${name}) 
 
-    set_tests_properties(${name} PROPERTIES LABELS "xdrzcc")
+    set_tests_properties(xdrzcc/${name} PROPERTIES LABELS "xdrzcc")
+
+    set_tests_properties(xdrzcc/${name} PROPERTIES ENVIRONMENT "TEST_FILE=${CMAKE_CURRENT_SOURCE_DIR}/${c_file}")
 
 endmacro()
 
-add_test(NAME xdrzcc_no_args COMMAND ${XDRZCC})
-set_tests_properties(xdrzcc_no_args PROPERTIES WILL_FAIL TRUE)
+add_test(NAME xdrzcc/xdrzcc_no_args COMMAND ${XDRZCC})
+set_tests_properties(xdrzcc/xdrzcc_no_args PROPERTIES WILL_FAIL TRUE)
 
-add_test(NAME xdrzcc_one_args COMMAND ${XDRZCC} foo)
-set_tests_properties(xdrzcc_one_args PROPERTIES WILL_FAIL TRUE)
+add_test(NAME xdrzcc/xdrzcc_one_args COMMAND ${XDRZCC} foo)
+set_tests_properties(xdrzcc/xdrzcc_one_args PROPERTIES WILL_FAIL TRUE)
 
-add_test(NAME xdrzcc_two_args COMMAND ${XDRZCC} foo bar)
-set_tests_properties(xdrzcc_two_args PROPERTIES WILL_FAIL TRUE)
+add_test(NAME xdrzcc/xdrzcc_two_args COMMAND ${XDRZCC} foo bar)
+set_tests_properties(xdrzcc/xdrzcc_two_args PROPERTIES WILL_FAIL TRUE)
 
-add_test(NAME xdrzcc_missing_source COMMAND ${XDRZCC} no such thing)
-set_tests_properties(xdrzcc_missing_source PROPERTIES WILL_FAIL TRUE)
+add_test(NAME xdrzcc/xdrzcc_missing_source COMMAND ${XDRZCC} no such thing)
+set_tests_properties(xdrzcc/xdrzcc_missing_source PROPERTIES WILL_FAIL TRUE)
 
-add_test(NAME xdrzcc_bad_output_source COMMAND ${XDRZCC} uint32.x nosuchdir/out.c nosuchdir/out.h)
-set_tests_properties(xdrzcc_bad_output_source PROPERTIES WILL_FAIL TRUE)
+add_test(NAME xdrzcc/xdrzcc_bad_output_source COMMAND ${XDRZCC} uint32.x nosuchdir/out.c nosuchdir/out.h)
+set_tests_properties(xdrzcc/xdrzcc_bad_output_source PROPERTIES WILL_FAIL TRUE)
 
-add_test(NAME xdrzcc_bad_output_header COMMAND ${XDRZCC} uint32.x out.c nosuchdir/out.h)
-set_tests_properties(xdrzcc_bad_output_header PROPERTIES WILL_FAIL TRUE)
+add_test(NAME xdrzcc/xdrzcc_bad_output_header COMMAND ${XDRZCC} uint32.x out.c nosuchdir/out.h)
+set_tests_properties(xdrzcc/xdrzcc_bad_output_header PROPERTIES WILL_FAIL TRUE)
 
 unit_test_xdrzcc(uint32 uint32.x uint32.c)
 unit_test_xdrzcc(uint32_array uint32_array.x uint32_array.c)
