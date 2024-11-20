@@ -17,6 +17,12 @@ typedef struct
 
 typedef struct
 {
+    uint32_t len;
+    void *data;
+} xdr_opaque;
+
+typedef struct
+{
     void *buffer;
     int size;
     int used;
@@ -29,10 +35,10 @@ xdr_dbuf_alloc(void)
 
     dbuf = malloc(sizeof(*dbuf));
 
-    dbuf->buffer = malloc(4096);
+    dbuf->buffer = malloc(65536);
 
     dbuf->used = 0;
-    dbuf->size = 4096;
+    dbuf->size = 65536;
 
     return dbuf;
 }
@@ -60,9 +66,17 @@ xdr_dbuf_reset(xdr_dbuf *dbuf)
 #define xdr_dbuf_strncpy(structp, member, istr, ilen, dbuf)            \
     {                                                                  \
         (structp)->member.len = (ilen);                                \
-        (structp)->member.str = (char *)(dbuf->buffer + (dbuf)->used); \
+        (structp)->member.str = (char *)(dbuf)->buffer + (dbuf)->used; \
         memcpy((structp)->member.str, (istr), (ilen) + 1);             \
         (dbuf)->used += (ilen) + 1;                                    \
+    }
+
+#define xdr_dbuf_memcpy(object, ibuf, ilen, dbuf)             \
+    {                                                                  \
+        (object)->len  = (ilen);                               \
+        (object)->data = (dbuf)->buffer + (dbuf)->used;        \
+        memcpy((object)->data, (ibuf), (ilen));                \
+        (dbuf)->used += (ilen);                                        \
     }
 
 #define xdr_set_str_static(structp, member, istr, ilen) \
