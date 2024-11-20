@@ -21,26 +21,24 @@ include_directories(${GENERATED_DIR})
 
 add_flex_bison_dependency(lexer parser)
 
-function(generate_embedded_code input_file output_file var_name)
-    file(STRINGS ${input_file} input_content)
-
-    set(output_content "")
-
-    foreach(line IN LISTS input_content)
-        string(REPLACE "\\" "\\\\" line "${line}")
-        string(REPLACE "\"" "\\\"" line "${line}")
-        set(output_content "${output_content}\"${line}\\n\"\n")
-    endforeach()
-
-    file(WRITE "${output_file}" "const char* ${var_name} = \n${output_content};\n")
-endfunction()
-
 set(BUILTIN_SOURCE ${CMAKE_CURRENT_BINARY_DIR}/xdr_builtin.c)
 set(BUILTIN_HEADER ${CMAKE_CURRENT_BINARY_DIR}/xdr_builtin_h.c)
 
-generate_embedded_code(xdr_builtin.c ${BUILTIN_SOURCE} embedded_builtin_c)
-generate_embedded_code(xdr_builtin.h ${BUILTIN_HEADER} embedded_builtin_h)
+add_custom_command(
+    OUTPUT ${BUILTIN_SOURCE}
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/generate_embedded.sh ${CMAKE_CURRENT_SOURCE_DIR}/xdr_builtin.c ${BUILTIN_SOURCE} embedded_builtin_c
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/xdr_builtin.c
+    COMMENT "Generating embedded C source"
+)
 
+add_custom_command(
+    OUTPUT ${BUILTIN_HEADER}
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/generate_embedded.sh ${CMAKE_CURRENT_SOURCE_DIR}/xdr_builtin.h ${BUILTIN_HEADER} embedded_builtin_h
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/xdr_builtin.h
+    COMMENT "Generating embedded C header"
+)
+
+add_custom_target(generate_embedded_files DEPENDS ${BUILTIN_SOURCE} ${BUILTIN_HEADER})
 set_source_files_properties(
     ${FLEX_OUTPUT} PROPERTIES COMPILE_OPTIONS -Wno-unused
 )
@@ -52,5 +50,7 @@ add_executable(xdrzcc
     ${FLEX_lexer_OUTPUTS}
     ${BISON_parser_OUTPUT_SOURCE}
 )
+
+add_dependencies(xdrzcc generate_embedded_files)
 
 set(XDRZCC ${CMAKE_CURRENT_BINARY_DIR}/xdrzcc PARENT_SCOPE)
