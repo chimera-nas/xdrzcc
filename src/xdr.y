@@ -56,7 +56,7 @@ void yyerror(const char *s) {
 %token <str> IDENTIFIER NUMBER
 %token UINT32 INT32 UINT64 INT64
 %token INT UNSIGNED FLOAT DOUBLE BOOL ENUM STRUCT TYPEDEF
-%token VOID STRING OPAQUE UNION SWITCH CASE DEFAULT CONST
+%token VOID STRING OPAQUE ZCOPAQUE UNION SWITCH CASE DEFAULT CONST
 %token LBRACE RBRACE LPAREN RPAREN SEMICOLON COLON EQUALS
 %token LBRACKET RBRACKET STAR LANGLE RANGLE COMMA PROGRAM VERSION
 
@@ -453,6 +453,15 @@ type:
         $$->name = "xdr_iovec";
         $$->builtin = 1;
         $$->opaque = 1;
+        $$->zerocopy = 0;
+    }
+    | ZCOPAQUE
+    {
+        $$ = xdr_alloc(sizeof(*$$));
+        $$->name = "xdr_iovec";
+        $$->builtin = 1;
+        $$->opaque = 1;
+        $$->zerocopy = 1;
     }
     | IDENTIFIER
     {

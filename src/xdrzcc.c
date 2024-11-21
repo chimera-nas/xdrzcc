@@ -110,19 +110,19 @@ emit_marshall(
     struct xdr_type *type)
 {
 
-    if (type->opaque && type->array) {
-        fprintf(output,
-                "    rc = xdr_write_cursor_append(cursor, in->%s, %s);\n",
-                name, type->array_size);
-    } else if (type->opaque) {
-        if (type->vector_bound) {
+    if (type->opaque) {
+        if (type->array) {
             fprintf(output,
-                    "    rc = __marshall_opaque_variable_bound(&in->%s, %s, cursor);\n",
-                    name, type->vector_bound);
+                    "    rc = xdr_write_cursor_append(cursor, in->%s, %s);\n",
+                    name, type->array_size);
+        } else if (type->zerocopy) {
+            fprintf(output,
+                    "    rc = __marshall_opaque_zerocopy(&in->%s, cursor);\n",
+                    name);
         } else {
             fprintf(output,
-                    "    rc = __marshall_opaque_variable(&in->%s, cursor);\n",
-                    name);
+                    "    rc = __marshall_opaque(&in->%s, %s, cursor);\n",
+                    name, type->vector_bound ? type->vector_bound : "0");
         }
     } else if (strcmp(type->name, "xdr_string") == 0) {
         fprintf(output,
@@ -156,19 +156,19 @@ emit_unmarshall(
     struct xdr_type *type)
 {
 
-    if (type->opaque && type->array) {
-        fprintf(output,
-                "    rc = xdr_read_cursor_extract(cursor, out->%s, %s);\n",
-                name, type->array_size);
-    } else if (type->opaque) {
-        if (type->vector_bound) {
+    if (type->opaque) {
+        if (type->array) {
             fprintf(output,
-                    "    rc = __unmarshall_opaque_variable_bound(&out->%s, %s, cursor, dbuf);\n",
-                    name, type->vector_bound);
+                    "    rc = xdr_read_cursor_extract(cursor, out->%s, %s);\n",
+                    name, type->array_size);
+        } else if (type->zerocopy) {
+            fprintf(output,
+                    "    rc = __unmarshall_opaque_zerocopy(&out->%s, cursor, dbuf);\n",
+                    name);
         } else {
             fprintf(output,
-                    "    rc = __unmarshall_opaque_variable(&out->%s, cursor, dbuf);\n",
-                    name);
+                    "    rc = __unmarshall_opaque(&out->%s, %s, cursor, dbuf);\n",
+                    name, type->vector_bound ? type->vector_bound : "0");
         }
     } else if (strcmp(type->name, "xdr_string") == 0) {
         fprintf(output,
@@ -261,12 +261,12 @@ emit_program_header(
 
         if (strcmp(functionp->call_type->name, "void")) {
             fprintf(header,
-                    "   void (*recv_call_%s)(struct evpl *evpl, %s *, struct evpl_rpc2_msg *, void *);\n",
+                    "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, %s *, struct evpl_rpc2_msg *, void *);\n",
                     functionp->name,
                     functionp->call_type->name);
         } else {
             fprintf(header,
-                    "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_msg *, void *);\n",
+                    "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, struct evpl_rpc2_msg *, void *);\n",
                     functionp->name);
         }
 
@@ -312,6 +312,7 @@ emit_program(
     fprintf(source, "static int\n");
     fprintf(source, "call_dispatch_%s(\n", version->name);
     fprintf(source, "    struct evpl *evpl,\n");
+    fprintf(source, "    struct evpl_rpc2_conn *conn,\n");
     fprintf(source, "    struct evpl_rpc2_msg *msg,\n");
     fprintf(source, "    xdr_iovec *iov,\n");
     fprintf(source, "    int niov,\n");
@@ -346,12 +347,12 @@ emit_program(
 
             /* Then make the call */
             fprintf(source,
-                    "        prog->recv_call_%s(evpl, %s_arg, msg, private_data);\n",
+                    "        prog->recv_call_%s(evpl, conn, %s_arg, msg, private_data);\n",
                     functionp->name, functionp->name);
         } else {
             /* No argument, just make the call */
             fprintf(source,
-                    "        prog->recv_call_%s(evpl, msg, private_data);\n",
+                    "        prog->recv_call_%s(evpl, conn, msg, private_data);\n",
                     functionp->name);
 
         }
@@ -441,13 +442,13 @@ emit_member(
                     "uint8_t",
                     name,
                     emit_type->array_size);
-        } else if (emit_type->vector_bound) {
+        } else if (emit_type->zerocopy) {
             fprintf(header, "    %-39s  %s;\n",
-                    "xdr_opaque",
+                    "xdr_iovecr",
                     name);
         } else {
             fprintf(header, "    %-39s  %s;\n",
-                    "xdr_iovecr",
+                    "xdr_opaque",
                     name);
         }
     } else if (strcmp(emit_type->name, "xdr_string") == 0) {
@@ -715,6 +716,7 @@ main(
         return 1;
     }
 
+    fprintf(header, "#pragma once\n");
     fprintf(header, "%s", embedded_builtin_h);
 
     fprintf(header, "\n");

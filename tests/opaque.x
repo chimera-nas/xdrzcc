@@ -1,3 +1,3 @@
 struct MyMsg {
-    opaque  data<>;
+    zcopaque  data<>;
 };

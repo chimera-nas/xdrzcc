@@ -56,6 +56,21 @@ xdr_dbuf_reset(xdr_dbuf *dbuf)
     dbuf->used = 0;
 }
 
+#define xdr_dbuf_alloc_opaque(opaque, ilen, dbuf) \
+    {                                      \
+        (opaque)->len = (ilen);             \
+        (opaque)->data = (dbuf)->buffer + (dbuf)->used; \
+        (dbuf)->used += (ilen);                        \
+    }
+
+#define xdr_dbuf_opaque_copy(opaque, ptr, ilen, dbuf) \
+    {                                      \
+        (opaque)->len = (ilen);             \
+        (opaque)->data = (dbuf)->buffer + (dbuf)->used; \
+        memcpy((opaque)->data, (ptr), (ilen)); \
+        (dbuf)->used += (ilen);              \
+    }
+
 #define xdr_dbuf_reserve(structp, member, num, dbuf)      \
     {                                                     \
         (structp)->num_##member = num;                    \

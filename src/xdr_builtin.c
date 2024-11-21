@@ -672,7 +672,7 @@ __unmarshall_opaque_fixed(
 } /* __unmarshall_opaque_fixed */
 
 static FORCE_INLINE int
-__marshall_opaque_variable_bound(
+__marshall_opaque(
     const xdr_opaque        *v,
     uint32_t                 bound,
     struct xdr_write_cursor *cursor)
@@ -707,7 +707,7 @@ __marshall_opaque_variable_bound(
 } /* __marshall_opaque_variable */
 
 static FORCE_INLINE int
-__marshall_opaque_variable(
+__marshall_opaque_zerocopy(
     const xdr_iovecr        *v,
     struct xdr_write_cursor *cursor)
 {
@@ -729,7 +729,7 @@ __marshall_opaque_variable(
 } /* __marshall_opaque_variable */
 
 static FORCE_INLINE int
-__unmarshall_opaque_variable_bound(
+__unmarshall_opaque(
     xdr_opaque             *v,
     uint32_t                bound,
     struct xdr_read_cursor *cursor,
@@ -766,7 +766,7 @@ __unmarshall_opaque_variable_bound(
 } /* __unmarshall_opaque_variable_bound */
 
 static FORCE_INLINE int
-__unmarshall_opaque_variable(
+__unmarshall_opaque_zerocopy(
     xdr_iovecr             *v,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
