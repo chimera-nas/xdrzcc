@@ -128,6 +128,18 @@ emit_marshall(
         fprintf(output,
                 "    rc = __marshall_xdr_string(&in->%s, 1, cursor);\n",
                 name);
+    } else if (type->optional) {
+        fprintf(output, "    {\n");
+        fprintf(output, "        uint32_t more = !!(in->%s);\n", name);
+        fprintf(output,
+                "        rc = __marshall_uint32_t(&more, 1, cursor);\n");
+        fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "        len += rc;\n");
+        fprintf(output,
+                "        rc = __marshall_%s(in->%s, more, cursor);\n",
+                type->name, name);
+        fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "    }\n");
     } else if (type->vector) {
         fprintf(output,
                 "    rc = __marshall_uint32_t(&in->num_%s, 1, cursor);\n",
@@ -174,6 +186,19 @@ emit_unmarshall(
         fprintf(output,
                 "    rc = __unmarshall_%s(&out->%s, 1, cursor, dbuf);\n",
                 type->name, name);
+    } else if (type->optional) {
+        fprintf(output, "    {\n");
+        fprintf(output, "        uint32_t more;\n");
+        fprintf(output,
+                "        rc = __unmarshall_uint32_t(&more, 1, cursor, dbuf);\n")
+        ;
+        fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "        len += rc;\n");
+        fprintf(output,
+                "        rc = __unmarshall_%s(out->%s, more, cursor, dbuf);\n",
+                type->name, name);
+        fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "    }\n");
     } else if (type->vector) {
         fprintf(output,
                 "    rc = __unmarshall_uint32_t(&out->num_%s, 1, cursor, dbuf);\n",
@@ -458,6 +483,10 @@ emit_member(
     } else if (emit_type->vector) {
         fprintf(header, "    %-39s  num_%s;\n",
                 "uint32_t", name);
+        fprintf(header, "    %-39s *%s;\n",
+                emit_type->name,
+                name);
+    } else if (emit_type->optional) {
         fprintf(header, "    %-39s *%s;\n",
                 emit_type->name,
                 name);

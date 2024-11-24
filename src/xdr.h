@@ -26,6 +26,7 @@ struct xdr_type {
     char *name;
     char *array_size;
     char *vector_bound;
+    int   optional;
     int   opaque;
     int   zerocopy;
     int   builtin;
@@ -63,6 +64,7 @@ struct xdr_struct_member {
 
 struct xdr_struct {
     char                     *name;
+    int                       linkedlist;
     struct xdr_struct_member *members;
     struct xdr_struct        *prev;
     struct xdr_struct        *next;

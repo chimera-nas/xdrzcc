@@ -257,9 +257,16 @@ enum_entry:
 struct_def:
     STRUCT IDENTIFIER LBRACE struct_body RBRACE
     {
+        struct xdr_struct_member *member;
         $$ = xdr_alloc(sizeof(*$$));
         $$->name = $2;
         $$->members = $4;
+
+        DL_FOREACH($$->members, member)
+        if (member->type->optional && 
+            strncmp(member->name, "next", 4) == 0) {
+            $$->linkedlist = 1;
+        }
     }
     ;
 
@@ -472,8 +479,8 @@ type:
     | type STAR
     {
         $$ = $1;
-        $$->vector = 1;
-        $$->vector_bound = "1";
+        $$->optional = 1;
+
     }
     | type LBRACKET NUMBER RBRACKET
     {
