@@ -32,6 +32,7 @@ struct xdr_type {
     int   builtin;
     int   vector;
     int   array;
+    int   enumeration;
 };
 
 struct xdr_typedef {

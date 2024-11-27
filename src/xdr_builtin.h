@@ -1,8 +1,10 @@
 #ifndef XDRZCC_XDR_BUILTIN_H
 #define XDRZCC_XDR_BUILTIN_H
 
+#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdarg.h>
 #include <stdlib.h>
 
 #ifndef XDR_MAX_DBUF
@@ -143,5 +145,10 @@ typedef struct
     int offset;
     uint32_t length;
 } xdr_iovecr;
+
+void
+dump_output(
+    const char *format,
+    ...);
 
 #endif

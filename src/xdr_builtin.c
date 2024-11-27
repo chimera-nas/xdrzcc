@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 
 #ifndef TRUE
@@ -788,3 +789,68 @@ __unmarshall_opaque_zerocopy(
 
     return 4 + rc;
 } /* __unmarshall_opaque_variable */
+
+static FORCE_INLINE int
+is_ascii(
+    const char *s,
+    int         len)
+{
+
+    int i;
+
+    if (len == 0) {
+        return 0;
+    }
+
+    for (i = 0; i < len; i++) {
+        if (s[i] < 0x20 || s[i] > 0x7E) {
+            return 0;
+        }
+    }
+
+    return 1;
+} /* is_ascii */
+
+static FORCE_INLINE void
+dump_opaque(
+    char       *out,
+    int         outlen,
+    const void *v,
+    uint32_t    length)
+{
+    int i;
+
+    if (is_ascii(v, length)) {
+        snprintf(out, outlen, "'%.*s' [%u bytes]", length, (const char *) v,
+                 length);
+        return;
+    }
+
+    if (length >= 32) {
+        snprintf(out, outlen, "<opaque> [%u bytes]", length);
+        return;
+    }
+
+    for (i = 0; i < length; ++i) {
+        snprintf(out, outlen, "%02x", ((const uint8_t *) v)[i]);
+        out    += 2;
+        outlen -= 2;
+    }
+
+    *out = '\0';
+} /* dump_opaque */
+
+#ifndef XDR_CUSTOM_DUMP
+void
+dump_output(
+    const char *format,
+    ...)
+{
+    va_list ap;
+
+    va_start(ap, format);
+    vfprintf(stderr, format, ap);
+    fprintf(stderr, "\n");
+    va_end(ap);
+} /* dump_output */
+#endif /* ifndef XDR_CUSTOM_DUMP */

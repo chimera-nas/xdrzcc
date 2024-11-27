@@ -13,7 +13,7 @@ macro(unit_test_xdrzcc name xdr_file c_file)
     add_custom_command(
         OUTPUT ${XDR_C} ${XDR_H}
         COMMAND ${XDRZCC} ${XDR_X} ${XDR_C} ${XDR_H}
-        DEPENDS ${xdr_file}
+        DEPENDS ${XDR_X} ${XDRZCC}
         COMMENT "Compiling ${xdr_file}"
     )
 
