@@ -536,6 +536,7 @@ emit_program(
     fprintf(source, "    struct evpl_rpc2_msg *msg,\n");
     fprintf(source, "    xdr_iovec *iov,\n");
     fprintf(source, "    int niov,\n");
+    fprintf(source, "    int length,\n");
     fprintf(source, "    void *private_data)\n");
     fprintf(source, "{\n");
     fprintf(source, "    struct %s *prog = msg->program->program_data;\n",
