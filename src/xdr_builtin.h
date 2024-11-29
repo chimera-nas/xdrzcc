@@ -86,6 +86,13 @@ xdr_dbuf_reset(xdr_dbuf *dbuf)
         dbuf->used += sizeof(*((structp)->member)); \
     }
 
+#define xdr_dbuf_reserve_str(structp, member, ilen, dbuf) \
+ .  {                                                                  \
+        (structp)->member.len = (ilen);                                \
+        (structp)->member.str = (char *)(dbuf)->buffer + (dbuf)->used; \
+        (dbuf)->used += (ilen) + 1;                                    \
+    }
+
 #define xdr_dbuf_strncpy(structp, member, istr, ilen, dbuf)            \
     {                                                                  \
         (structp)->member.len = (ilen);                                \
