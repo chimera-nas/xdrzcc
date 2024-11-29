@@ -596,17 +596,17 @@ emit_program(
             fprintf(source, "{\n");
             fprintf(source, "    struct evpl_rpc2_msg *msg = private_data;\n");
             fprintf(source, "    struct evpl_iovec iov[16], msg_iov[16];\n");
-            fprintf(source, "    int niov,len;\n");
+            fprintf(source, "    int niov, msg_niov = 16,len;\n");
             fprintf(source,
                     "    niov = evpl_iovec_reserve(evpl, 1024*1024, 0, 16, iov);\n");
             fprintf(source, "    if (unlikely(niov < 0)) return;\n");
             fprintf(source,
-                    "    len = marshall_%s(arg, 1, iov, 16, msg_iov, &niov, 0);\n",
+                    "    len = marshall_%s(arg, 1, iov, niov, msg_iov, &msg_niov, 0);\n",
                     functionp->reply_type->name);
             fprintf(source, "    if (unlikely(len < 0)) abort();\n");
             fprintf(source, "    evpl_iovec_commit(evpl, 0, msg_iov, niov);\n");
             fprintf(source,
-                    "    msg->program->reply_dispatch(evpl, msg, msg_iov, niov, len);\n");
+                    "    msg->program->reply_dispatch(evpl, msg, msg_iov, msg_niov, len);\n");
         } else {
             fprintf(source,
                     "void send_reply_%s(struct evpl *evpl, void *private_data)\n",

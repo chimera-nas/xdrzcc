@@ -7,13 +7,16 @@
 
 #include "opaque_xdr.h"
 
-int main(int argc, char *argv[])
+int
+main(
+    int   argc,
+    char *argv[])
 {
     struct MyMsg msg1, msg2;
-    xdr_dbuf *dbuf;
-    uint8_t buffer[256], data[7];
-    xdr_iovec iov_in, iov_out[3], iov_data;
-    int i, rc, niov_out = 3;
+    xdr_dbuf    *dbuf;
+    uint8_t      buffer[256], data[7];
+    xdr_iovec    iov_in, iov_out[3], iov_data;
+    int          i, rc, niov_out = 3;
 
     xdr_iovec_set_data(&iov_in, buffer);
     xdr_iovec_set_len(&iov_in, sizeof(buffer));
@@ -26,8 +29,8 @@ int main(int argc, char *argv[])
     }
 
     dbuf = xdr_dbuf_alloc();
-    
-    xdr_set_ref(&msg1, data, &iov_data, 1, 0, 7);
+
+    xdr_set_ref(&msg1, data, &iov_data, 1, 7);
 
     assert(xdr_iovec_len(msg1.data.iov) == 7);
     assert(memcmp(xdr_iovec_data(msg1.data.iov), data, 7) == 0);
@@ -37,7 +40,7 @@ int main(int argc, char *argv[])
     assert(niov_out == 3);
     assert(rc == 12);
 
-    rc = unmarshall_MyMsg(&msg2, 1, iov_out, niov_out, dbuf); 
+    rc = unmarshall_MyMsg(&msg2, 1, iov_out, niov_out, dbuf);
 
     assert(rc == 12);
 
@@ -48,4 +51,4 @@ int main(int argc, char *argv[])
     xdr_dbuf_free(dbuf);
 
     return 0;
-}
+} /* main */

@@ -108,11 +108,10 @@ xdr_dbuf_reset(xdr_dbuf *dbuf)
         (structp)->member.str = (char *)(istr);         \
     }
 
-#define xdr_set_ref(structp, member, iiov, iniov, ioffset, ilength) \
+#define xdr_set_ref(structp, member, iiov, iniov, ilength) \
     {                                                               \
         (structp)->member.iov = (iiov);                             \
         (structp)->member.niov = (iniov);                           \
-        (structp)->member.offset = (ioffset);                       \
         (structp)->member.length = (ilength);                       \
     }
 
@@ -135,14 +134,14 @@ typedef struct
 #define xdr_iovec_set_len(iov, len) ((iov)->iov_len = (len))
 
 #define xdr_iovec_copy_private(out, in)
+#define xdr_iovec_set_private_null(out)
 
 #endif
 
 typedef struct
 {
-    const xdr_iovec *iov;
+    xdr_iovec *iov;
     int niov;
-    int offset;
     uint32_t length;
 } xdr_iovecr;
 

@@ -589,32 +589,24 @@ __marshall_opaque_fixed(
         return 0;
     }
 
-    if (xdr_iovec_len(cursor->cur)) {
-
-        if (unlikely(cursor->cur == cursor->last)) {
-            return -1;
-        }
-
-        cursor->cur++;
-    }
-
     for (i = 0; i < v->niov && left; ++i) {
-        *cursor->cur = v->iov[i];
 
-        if (i == 0 && v->offset) {
-            rc = xdr_iovec_add_offset(cursor->cur, v->offset);
+        if (xdr_iovec_len(cursor->cur)) {
 
-            if (unlikely(rc)) {
-                return rc;
+            if (unlikely(cursor->cur == cursor->last)) {
+                return -1;
             }
+
+            cursor->cur++;
         }
+
+        *cursor->cur = v->iov[i];
 
         if (xdr_iovec_len(cursor->cur) > left) {
             xdr_iovec_set_len(cursor->cur, left);
-            left = 0;
-        } else {
-            left -= xdr_iovec_len(cursor->cur);
         }
+
+        left -= xdr_iovec_len(cursor->cur);
     }
 
     if (unlikely(left)) {
@@ -628,7 +620,7 @@ __marshall_opaque_fixed(
     cursor->cur++;
 
     xdr_iovec_set_data(cursor->cur, xdr_iovec_data(prev) + xdr_iovec_len(prev));
-    xdr_iovec_copy_private(cursor->cur, prev);
+    xdr_iovec_set_private_null(cursor->cur);
     xdr_iovec_set_len(cursor->cur, 0);
 
     pad = (4 - (size & 0x3)) & 0x3;
@@ -654,16 +646,30 @@ __unmarshall_opaque_fixed(
 {
     int pad, left = size;
 
+    v->iov    = dbuf->buffer + dbuf->used;
     v->length = size;
-    v->iov    = cursor->cur;
     v->niov   = 0;
 
-    while (left > 0) {
-        left -= xdr_iovec_len(&v->iov[v->niov]);
-        v->niov++;
-    }
+    do {
 
-    v->offset = cursor->offset;
+        xdr_iovec_set_data(&v->iov[v->niov], xdr_iovec_data(cursor->cur) +
+                           cursor->offset);
+        xdr_iovec_set_len(&v->iov[v->niov], xdr_iovec_len(cursor->cur));
+
+        xdr_iovec_copy_private(&v->iov[v->niov], cursor->cur);
+
+        if (left < xdr_iovec_len(&v->iov[v->niov])) {
+            xdr_iovec_set_len(&v->iov[v->niov], left);
+        }
+
+        left -= xdr_iovec_len(&v->iov[v->niov]);
+
+        cursor->cur++;
+        cursor->offset = 0;
+        v->niov++;
+    } while (left);
+
+    dbuf->used += sizeof(xdr_iovec) * v->niov;
 
     pad = (4 - (size & 0x3)) & 0x3;
 
