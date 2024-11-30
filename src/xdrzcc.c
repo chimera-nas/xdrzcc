@@ -1238,7 +1238,13 @@ main(
         {
             if (strcmp(xdr_union_casep->label, "default") == 0) {
                 fprintf(source, "    default:\n");
-                fprintf(source, "        break;\n");
+                if (xdr_union_casep->voided) {
+                    fprintf(source, "        break;\n");
+                } else if (xdr_union_casep->type) {
+                    emit_marshall(source, xdr_union_casep->name, xdr_union_casep
+                                  ->type);
+                    fprintf(source, "        break;\n");
+                }
             }
         }
 
