@@ -27,7 +27,10 @@ endif()
 add_definitions(-g -Wall -Werror)
 
 add_subdirectory(src)
-add_subdirectory(tests)
+
+if (NOT DISABLE_TESTS)
+    add_subdirectory(tests)
+endif()
 
 if (NOT "${CMAKE_SOURCE_DIR}" STREQUAL "${PROJECT_SOURCE_DIR}")
     set(XDRZCC ${XDRZCC} PARENT_SCOPE)
