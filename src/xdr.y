@@ -266,6 +266,8 @@ struct_def:
         if (member->type->optional && 
             strncmp(member->name, "next", 4) == 0) {
             $$->linkedlist = 1;
+            $$->nextmember = member->name;
+            member->type->linkedlist = 1;
         }
     }
     ;

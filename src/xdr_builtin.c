@@ -134,46 +134,34 @@ xdr_read_cursor_extract(
     void                   *out,
     unsigned int            bytes)
 {
-    unsigned int done, chunk;
+    unsigned int left, chunk;
 
-    if (cursor->offset + bytes <= xdr_iovec_len(cursor->cur)) {
-        memcpy(out, xdr_iovec_data(cursor->cur) + cursor->offset, bytes);
-        cursor->offset += bytes;
+    left = bytes;
+
+    while (left) {
+
+        chunk = xdr_iovec_len(cursor->cur) - cursor->offset;
+
+        if (left < chunk) {
+            chunk = left;
+        }
+
+        memcpy(out,
+               xdr_iovec_data(cursor->cur) + cursor->offset,
+               chunk);
+
+        left           -= chunk;
+        out            += chunk;
+        cursor->offset += chunk;
 
         if (cursor->offset == xdr_iovec_len(cursor->cur)) {
-            cursor->cur++;
-            cursor->offset = 0;
-        }
-    } else {
-
-        done = 0;
-
-        while (done < bytes) {
-
-            chunk = xdr_iovec_len(cursor->cur) - cursor->offset;
-
-            if (chunk > bytes - done) {
-                chunk = bytes - done;
-            }
-
-            if (chunk) {
-                memcpy(out + done,
-                       xdr_iovec_data(cursor->cur) + cursor->offset,
-                       chunk);
-            }
-
-            done += chunk;
-
-            if (done < bytes && cursor->cur == cursor->last) {
-                return -1;
-            }
-
             cursor->cur++;
             cursor->offset = 0;
         }
     }
 
     return bytes;
+
 } /* xdr_read_cursor_extract */
 
 static inline int
@@ -620,7 +608,7 @@ __marshall_opaque_fixed(
     cursor->cur++;
 
     xdr_iovec_set_data(cursor->cur, xdr_iovec_data(prev) + xdr_iovec_len(prev));
-    xdr_iovec_set_private_null(cursor->cur);
+    xdr_iovec_copy_private(cursor->cur, prev);
     xdr_iovec_set_len(cursor->cur, 0);
 
     pad = (4 - (size & 0x3)) & 0x3;
@@ -690,13 +678,13 @@ __marshall_opaque(
     rc = __marshall_uint32_t(&v->len, 1, cursor);
 
     if (unlikely(rc < 0)) {
-        return rc;
+        abort();
     }
 
     rc = xdr_write_cursor_append(cursor, v->data, v->len);
 
     if (unlikely(rc < 0)) {
-        return rc;
+        abort();
     }
 
 
@@ -706,7 +694,7 @@ __marshall_opaque(
         rc = xdr_write_cursor_append(cursor, &zero, pad);
 
         if (unlikely(rc < 0)) {
-            return rc;
+            abort();
         }
     }
 
@@ -723,13 +711,13 @@ __marshall_opaque_zerocopy(
     rc = __marshall_uint32_t(&v->length, 1, cursor);
 
     if (unlikely(rc < 0)) {
-        return rc;
+        abort();
     }
 
     rc = __marshall_opaque_fixed(v, v->length, cursor);
 
     if (unlikely(rc < 0)) {
-        return rc;
+        abort();
     }
 
     return 4 + rc;

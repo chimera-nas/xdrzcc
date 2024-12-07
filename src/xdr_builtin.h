@@ -80,10 +80,10 @@ xdr_dbuf_reset(xdr_dbuf *dbuf)
         dbuf->used += num * sizeof(*((structp)->member)); \
     }
 
-#define xdr_dbuf_reserve_ll(structp, member, dbuf)      \
+#define xdr_dbuf_alloc_space(ptr, size, dbuf)      \
     {                                                     \
-        (structp)->member = dbuf->buffer + dbuf->used;    \
-        dbuf->used += sizeof(*((structp)->member)); \
+        ptr = dbuf->buffer + dbuf->used;    \
+        dbuf->used += size; \
     }
 
 #define xdr_dbuf_reserve_str(structp, member, ilen, dbuf) \
