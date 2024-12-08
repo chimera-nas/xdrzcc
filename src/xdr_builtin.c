@@ -477,21 +477,29 @@ __unmarshall_xdr_string(
 
     len += rc;
 
-    str->str = dbuf->buffer + dbuf->used;
+    if (xdr_iovec_len(cursor->cur) - cursor->offset >= str->len) {
+        str->str        = xdr_iovec_data(cursor->cur) + cursor->offset;
+        cursor->offset += str->len;
 
-    dbuf->used += str->len + 1;
+        if (cursor->offset == xdr_iovec_len(cursor->cur)) {
+            cursor->cur++;
+            cursor->offset = 0;
+        }
 
-    rc = xdr_read_cursor_extract(cursor, str->str, str->len);
+    } else {
+        str->str    = dbuf->buffer + dbuf->used;
+        dbuf->used += str->len;
 
-    if (unlikely(rc < 0)) {
-        return rc;
+        rc = xdr_read_cursor_extract(cursor, str->str, str->len);
+
+        if (unlikely(rc < 0)) {
+            return rc;
+        }
+
     }
 
-    len += rc;
-
-    str->str[str->len] = '\0';
-
-    pad = (4 - (str->len & 0x3)) & 0x3;
+    len += str->len;
+    pad  = (4 - (str->len & 0x3)) & 0x3;
 
     if (pad) {
         rc = xdr_read_cursor_skip(cursor, pad);
@@ -639,7 +647,7 @@ __marshall_opaque(
     }
 
     return 4 + v->len + pad;
-} /* __marshall_opaque_variable */
+} /* __marshall_opaque */
 
 static FORCE_INLINE int
 __marshall_opaque_zerocopy(
@@ -661,7 +669,7 @@ __marshall_opaque_zerocopy(
     }
 
     return 4 + rc;
-} /* __marshall_opaque_variable */
+} /* __marshall_opaque_zerocopy */
 
 static FORCE_INLINE int
 __unmarshall_opaque(
@@ -678,13 +686,24 @@ __unmarshall_opaque(
         return rc;
     }
 
-    v->data     = dbuf->buffer + dbuf->used;
-    dbuf->used += v->len;
+    if (xdr_iovec_len(cursor->cur) - cursor->offset >= v->len) {
+        v->data         = xdr_iovec_data(cursor->cur) + cursor->offset;
+        cursor->offset += v->len;
 
-    rc = xdr_read_cursor_extract(cursor, v->data, v->len);
+        if (cursor->offset == xdr_iovec_len(cursor->cur)) {
+            cursor->cur++;
+            cursor->offset = 0;
+        }
 
-    if (unlikely(rc < 0)) {
-        return rc;
+    } else {
+        v->data     = dbuf->buffer + dbuf->used;
+        dbuf->used += v->len;
+
+        rc = xdr_read_cursor_extract(cursor, v->data, v->len);
+
+        if (unlikely(rc < 0)) {
+            return rc;
+        }
     }
 
     pad = (4 - (v->len & 0x3)) & 0x3;
