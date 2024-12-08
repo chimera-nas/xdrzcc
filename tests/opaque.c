@@ -35,12 +35,16 @@ main(
     assert(xdr_iovec_len(msg1.data.iov) == 7);
     assert(memcmp(xdr_iovec_data(msg1.data.iov), data, 7) == 0);
 
-    rc = marshall_MyMsg(&msg1, 1, &iov_in, 1, iov_out, &niov_out, 0);
+    rc = marshall_MyMsg(&msg1, &iov_in, 1, iov_out, &niov_out, 0);
 
     assert(niov_out == 3);
     assert(rc == 12);
 
-    rc = unmarshall_MyMsg(&msg2, 1, iov_out, niov_out, dbuf);
+    fprintf(stderr, "marshalled to %d bytes %d niov\n", rc, niov_out);
+    for (int i = 0; i < niov_out; ++i) {
+        fprintf(stderr, "iov_out[%d] = %d\n", i, xdr_iovec_len(&iov_out[i]));
+    }
+    rc = unmarshall_MyMsg(&msg2, iov_out, niov_out, dbuf);
 
     assert(rc == 12);
 

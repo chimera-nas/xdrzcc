@@ -30,11 +30,11 @@ main(
         msg1.value[i] = i;
     }
 
-    rc = marshall_MyMsg(&msg1, 1, &iov_in, 1, &iov_out, &one, 0);
+    rc = marshall_MyMsg(&msg1, &iov_in, 1, &iov_out, &one, 0);
 
     assert(rc == 68);
 
-    rc = unmarshall_MyMsg(&msg2, 1, &iov_out, 1, dbuf);
+    rc = unmarshall_MyMsg(&msg2, &iov_out, one, dbuf);
 
     assert(rc == 68);
 

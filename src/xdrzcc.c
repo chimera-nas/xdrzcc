@@ -115,20 +115,20 @@ emit_marshall(
     if (type->opaque) {
         if (type->array) {
             fprintf(output,
-                    "    rc = xdr_write_cursor_append(cursor, in->%s, %s);\n",
+                    "    len += xdr_write_cursor_append(cursor, in->%s, %s);\n",
                     name, type->array_size);
         } else if (type->zerocopy) {
             fprintf(output,
-                    "    rc = __marshall_opaque_zerocopy(&in->%s, cursor);\n",
+                    "    len += __marshall_opaque_zerocopy(&in->%s, cursor);\n",
                     name);
         } else {
             fprintf(output,
-                    "    rc = __marshall_opaque(&in->%s, %s, cursor);\n",
+                    "    len += __marshall_opaque(&in->%s, %s, cursor);\n",
                     name, type->vector_bound ? type->vector_bound : "0");
         }
     } else if (strcmp(type->name, "xdr_string") == 0) {
         fprintf(output,
-                "    rc = __marshall_xdr_string(&in->%s, 1, cursor);\n",
+                "    len += __marshall_xdr_string(&in->%s, cursor);\n",
                 name);
     } else if (type->linkedlist) {
 
@@ -148,53 +148,45 @@ emit_marshall(
         fprintf(output, "        while (current != NULL) {\n");
         fprintf(output, "            more = 1;\n");
         fprintf(output,
-                "            rc = __marshall_uint32_t(&more, 1, cursor);\n");
-        fprintf(output, "            if (unlikely(rc < 0)) abort();\n");
-        fprintf(output, "            len += rc;\n");
+                "            len += __marshall_uint32_t(&more, cursor);\n");
         fprintf(output,
-                "            rc = __marshall_%s(current, more, cursor);\n",
+                "            len += __marshall_%s(current, cursor);\n",
                 type->name);
-        fprintf(output, "            if (unlikely(rc < 0)) abort();\n");
-        fprintf(output, "            len += rc;\n");
         fprintf(output, "            current = current->%s;\n", liststruct->
                 nextmember);
         fprintf(output, "        }\n");
         fprintf(output, "        more = 0;\n");
-        fprintf(output, "        rc = __marshall_uint32_t(&more, 1, cursor);\n")
-        ;
+        fprintf(output, "        len += __marshall_uint32_t(&more, cursor);\n");
         fprintf(output, "    }\n");
     } else if (type->optional) {
         fprintf(output, "    {\n");
         fprintf(output, "        uint32_t more = !!(in->%s);\n", name);
         fprintf(output,
-                "        rc = __marshall_uint32_t(&more, 1, cursor);\n");
-        fprintf(output, "        if (unlikely(rc < 0)) abort();\n");
-        fprintf(output, "        len += rc;\n");
+                "        len += __marshall_uint32_t(&more, cursor);\n");
+        fprintf(output, "        if (more) {\n");
         fprintf(output,
-                "        rc = __marshall_%s(in->%s, more, cursor);\n",
+                "        len += __marshall_%s(in->%s, cursor);\n",
                 type->name, name);
-        fprintf(output, "        if (unlikely(rc < 0)) abort();\n");
-        fprintf(output, "        len += rc;\n");
+        fprintf(output, "        }\n");
         fprintf(output, "    }\n");
     } else if (type->vector) {
         fprintf(output,
-                "    rc = __marshall_uint32_t(&in->num_%s, 1, cursor);\n",
+                "    len += __marshall_uint32_t(&in->num_%s, cursor);\n",
                 name);
-        fprintf(output, "    if (unlikely(rc < 0)) abort();\n");
-        fprintf(output, "    len += rc;\n");
-        fprintf(output, "    rc = __marshall_%s(in->%s, in->num_%s, cursor);\n",
-                type->name, name, name);
+        fprintf(output, "    for (int i = 0; i < in->num_%s; i++) {\n", name);
+        fprintf(output, "        len += __marshall_%s(&in->%s[i], cursor);\n",
+                type->name, name);
+        fprintf(output, "    }\n");
     } else if (type->array) {
-
-        fprintf(output, "    rc = __marshall_%s(in->%s, %s, cursor);\n",
-                type->name, name, type->array_size);
+        fprintf(output, "    for (int i = 0; i < %s; ++i) {\n",
+                type->array_size);
+        fprintf(output, "        len += __marshall_%s(&in->%s[i], cursor);\n",
+                type->name, name);
+        fprintf(output, "    }\n");
     } else {
-        fprintf(output, "    rc = __marshall_%s(&in->%s, 1, cursor);\n",
+        fprintf(output, "    len += __marshall_%s(&in->%s, cursor);\n",
                 type->name, name);
     }
-
-    fprintf(output, "    if (unlikely(rc < 0)) abort();\n");
-    fprintf(output, "    len += rc;\n");
 } /* emit_marshall */
 
 void
@@ -220,41 +212,51 @@ emit_unmarshall(
         }
     } else if (strcmp(type->name, "xdr_string") == 0) {
         fprintf(output,
-                "    rc = __unmarshall_%s(&out->%s, 1, cursor, dbuf);\n",
+                "    rc = __unmarshall_%s(&out->%s, cursor, dbuf);\n",
                 type->name, name);
     } else if (type->optional) {
         fprintf(output, "    {\n");
         fprintf(output, "        uint32_t more;\n");
         fprintf(output,
-                "        rc = __unmarshall_uint32_t(&more, 1, cursor, dbuf);\n")
+                "        rc = __unmarshall_uint32_t(&more, cursor, dbuf);\n")
         ;
         fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "        len += rc;\n");
+        fprintf(output, "        if (more) {\n");
         fprintf(output,
-                "        rc = __unmarshall_%s(out->%s, more, cursor, dbuf);\n",
+                "        rc = __unmarshall_%s(out->%s, cursor, dbuf);\n",
                 type->name, name);
-        fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "        }\n");
         fprintf(output, "    }\n");
     } else if (type->vector) {
         fprintf(output,
-                "    rc = __unmarshall_uint32_t(&out->num_%s, 1, cursor, dbuf);\n",
+                "    rc = __unmarshall_uint32_t(&out->num_%s, cursor, dbuf);\n",
                 name);
         fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "    len += rc;\n");
-
         fprintf(output, "     xdr_dbuf_reserve(out, %s, out->num_%s, dbuf);\n",
                 name, name);
+        fprintf(output, "    for (int i = 0; i < out->num_%s; i++) {\n", name);
         fprintf(output,
-                "    rc = __unmarshall_%s(out->%s, out->num_%s, cursor, dbuf);\n",
-                type->name, name, name);
+                "    rc = __unmarshall_%s(&out->%s[i], cursor, dbuf);\n",
+                type->name, name);
+        fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "        len += rc;\n");
+        fprintf(output, "    }\n");
+        fprintf(output, "    rc = 0;\n");
     } else if (type->array) {
-
+        fprintf(output, "    for (int i = 0; i < %s; i++) {\n",
+                type->array_size);
         fprintf(output,
-                "    rc = __unmarshall_%s(out->%s, %s, cursor, dbuf);\n",
-                type->name, name, type->array_size);
+                "    rc = __unmarshall_%s(&out->%s[i], cursor, dbuf);\n",
+                type->name, name);
+        fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "        len += rc;\n");
+        fprintf(output, "    }\n");
+        fprintf(output, "    rc = 0;\n");
     } else {
         fprintf(output,
-                "    rc = __unmarshall_%s(&out->%s, 1, cursor, dbuf);\n",
+                "    rc = __unmarshall_%s(&out->%s, cursor, dbuf);\n",
                 type->name, name);
     }
 
@@ -271,13 +273,11 @@ emit_internal_headers(
     fprintf(source, "static int\n");
     fprintf(source, "__marshall_%s(\n", name);
     fprintf(source, "    const struct %s *in,\n", name);
-    fprintf(source, "    int n,\n");
     fprintf(source, "    struct xdr_write_cursor *cursor);\n\n");
 
     fprintf(source, "static int\n");
     fprintf(source, "__unmarshall_%s(\n", name);
     fprintf(source, "    struct %s *out,\n", name);
-    fprintf(source, "    int n,\n");
     fprintf(source, "    struct xdr_read_cursor *cursor,\n");
     fprintf(source, "    xdr_dbuf *dbuf);\n\n");
 } /* emit_internal_headers */
@@ -289,7 +289,6 @@ emit_wrapper_headers(
 {
     fprintf(header, "int marshall_%s(\n", name);
     fprintf(header, "    const struct %s *in,\n", name);
-    fprintf(header, "    int n,\n");
     fprintf(header, "    const xdr_iovec *iov_in,\n");
     fprintf(header, "    int niov_in,\n");
     fprintf(header, "    xdr_iovec *iov_out,\n");
@@ -298,7 +297,6 @@ emit_wrapper_headers(
 
     fprintf(header, "int unmarshall_%s(\n", name);
     fprintf(header, "    struct %s *out,\n", name);
-    fprintf(header, "    int n,\n");
     fprintf(header, "    const xdr_iovec *iov,\n");
     fprintf(header, "    int niov,\n");
     fprintf(header, "    xdr_dbuf *dbuf);\n\n");
@@ -615,7 +613,7 @@ emit_program(
                     functionp->call_type->name,
                     functionp->name);
             fprintf(source,
-                    "        len = unmarshall_%s(%s_arg, 1, iov, niov, msg->dbuf);\n",
+                    "        len = unmarshall_%s(%s_arg, iov, niov, msg->dbuf);\n",
                     functionp->call_type->name, functionp->name);
             fprintf(source, "        if (unlikely(len != length)) abort();\n");
             fprintf(source, "        if (len < 0) return 2;\n");
@@ -655,7 +653,7 @@ emit_program(
                     "    niov = evpl_iovec_reserve(evpl, 1024*1024, 0, 16, iov);\n");
             fprintf(source, "    if (unlikely(niov < 0)) return;\n");
             fprintf(source,
-                    "    len = marshall_%s(arg, 1, iov, niov, msg_iov, &msg_niov, 0);\n",
+                    "    len = marshall_%s(arg, iov, niov, msg_iov, &msg_niov, 0);\n",
                     functionp->reply_type->name);
             fprintf(source, "    if (unlikely(len < 0)) abort();\n");
             fprintf(source,
@@ -783,7 +781,6 @@ emit_wrappers(
     fprintf(source, "int\n");
     fprintf(source, "marshall_%s(\n", name);
     fprintf(source, "    const struct %s *out,\n", name);
-    fprintf(source, "    int n,\n");
     fprintf(source, "    const xdr_iovec *iov_in,\n");
     fprintf(source, "    int niov_in,\n");
     fprintf(source, "    xdr_iovec *iov_out,\n");
@@ -793,7 +790,7 @@ emit_wrappers(
     fprintf(source,
             "    xdr_write_cursor_init(&cursor, iov_in, niov_in, iov_out, *niov_out, out_offset);\n");
     fprintf(source, "    int rc;\n");
-    fprintf(source, "    rc = __marshall_%s(out, n, &cursor);\n", name);
+    fprintf(source, "    rc = __marshall_%s(out, &cursor);\n", name);
     fprintf(source, "    *niov_out = xdr_write_cursor_finish(&cursor);\n");
     fprintf(source, "    return rc;\n");
     fprintf(source, "}\n\n");
@@ -801,13 +798,12 @@ emit_wrappers(
     fprintf(source, "int\n");
     fprintf(source, "unmarshall_%s(\n", name);
     fprintf(source, "    struct %s *out,\n", name);
-    fprintf(source, "    int n,\n");
     fprintf(source, "    const xdr_iovec *iov,\n");
     fprintf(source, "    int niov,\n");
     fprintf(source, "    xdr_dbuf *dbuf) {\n");
     fprintf(source, "    struct xdr_read_cursor cursor;\n");
     fprintf(source, "    xdr_read_cursor_init(&cursor, iov, niov);\n");
-    fprintf(source, "    return __unmarshall_%s(out, n, &cursor, dbuf);\n", name
+    fprintf(source, "    return __unmarshall_%s(out, &cursor, dbuf);\n", name
             );
     fprintf(source, "}\n\n");
 } /* emit_wrappers */
@@ -1222,13 +1218,9 @@ main(
 
         fprintf(source, "static int\n");
         fprintf(source, "__marshall_%s(\n", xdr_structp->name);
-        fprintf(source, "    const struct %s *inarray,\n", xdr_structp->name);
-        fprintf(source, "    int n,\n");
+        fprintf(source, "    const struct %s *in,\n", xdr_structp->name);
         fprintf(source, "    struct xdr_write_cursor *cursor) {\n");
-        fprintf(source, "    const struct %s *in;\n", xdr_structp->name);
-        fprintf(source, "    int i, rc, len = 0;\n");
-        fprintf(source, "    for (i = 0; i < n; ++i) { \n");
-        fprintf(source, "        in = &inarray[i];\n");
+        fprintf(source, "    int rc, len = 0;\n");
 
         DL_FOREACH(xdr_structp->members, xdr_struct_memberp)
         {
@@ -1241,27 +1233,21 @@ main(
                           xdr_struct_memberp->type);
         }
 
-        fprintf(source, "    }\n");
         fprintf(source, "    return len;\n");
         fprintf(source, "}\n\n");
 
         fprintf(source, "static int\n");
         fprintf(source, "__unmarshall_%s(\n", xdr_structp->name);
-        fprintf(source, "    struct %s *outarray,\n", xdr_structp->name);
-        fprintf(source, "    int n,\n");
+        fprintf(source, "    struct %s *out,\n", xdr_structp->name);
         fprintf(source, "    struct xdr_read_cursor *cursor,\n");
         fprintf(source, "    xdr_dbuf *dbuf) {\n");
-        fprintf(source, "    struct %s *out;\n", xdr_structp->name);
-        fprintf(source, "    int i, rc, len = 0;\n");
-        fprintf(source, "    for (i = 0; i < n; ++i) { \n");
-        fprintf(source, "        out = &outarray[i];\n");
+        fprintf(source, "    int rc, len = 0;\n");
 
         DL_FOREACH(xdr_structp->members, xdr_struct_memberp)
         {
             emit_unmarshall(source, xdr_struct_memberp->name, xdr_struct_memberp
                             ->type);
         }
-        fprintf(source, "    }\n");
         fprintf(source, "    return len;\n");
         fprintf(source, "}\n\n");
 
@@ -1274,13 +1260,9 @@ main(
     {
         fprintf(source, "static int\n");
         fprintf(source, "__marshall_%s(\n", xdr_unionp->name);
-        fprintf(source, "    const struct %s *inarray,\n", xdr_unionp->name);
-        fprintf(source, "    int n,\n");
+        fprintf(source, "    const struct %s *in,\n", xdr_unionp->name);
         fprintf(source, "    struct xdr_write_cursor *cursor) {\n");
-        fprintf(source, "    const struct %s *in;\n", xdr_unionp->name);
-        fprintf(source, "    int i, rc, len = 0;\n");
-        fprintf(source, "    for (i = 0; i < n; ++i) { \n");
-        fprintf(source, "        in = &inarray[i];\n");
+        fprintf(source, "    int rc, len = 0;\n");
 
         emit_marshall(source, xdr_unionp->pivot_name, xdr_unionp->pivot_type);
 
@@ -1315,20 +1297,15 @@ main(
         }
 
         fprintf(source, "    }\n");
-        fprintf(source, "    };\n");
         fprintf(source, "    return len;\n");
         fprintf(source, "}\n\n");
 
         fprintf(source, "static int\n");
         fprintf(source, "__unmarshall_%s(\n", xdr_unionp->name);
-        fprintf(source, "    struct %s *outarray,\n", xdr_unionp->name);
-        fprintf(source, "    int n,\n");
+        fprintf(source, "    struct %s *out,\n", xdr_unionp->name);
         fprintf(source, "    struct xdr_read_cursor *cursor,\n");
         fprintf(source, "    xdr_dbuf *dbuf) {\n");
-        fprintf(source, "    struct %s *out;\n", xdr_unionp->name);
-        fprintf(source, "    int i, rc, len = 0;\n");
-        fprintf(source, "    for (i = 0; i < n; ++i) { \n");
-        fprintf(source, "        out = &outarray[i];\n");
+        fprintf(source, "    int rc, len = 0;\n");
 
         emit_unmarshall(source, xdr_unionp->pivot_name, xdr_unionp->pivot_type);
 
@@ -1356,7 +1333,6 @@ main(
             }
         }
         fprintf(source, "    }\n");
-        fprintf(source, "    };\n");
         fprintf(source, "    return len;\n");
         fprintf(source, "}\n\n");
 

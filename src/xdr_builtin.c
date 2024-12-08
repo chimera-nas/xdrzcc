@@ -200,7 +200,7 @@ xdr_write_cursor_append(
 
             if (done < bytes && (cursor->cur == cursor->last || cursor->
                                  scratch_iov == cursor->scratch_last)) {
-                return -1;
+                abort();
             }
 
             cursor->cur++;
@@ -241,7 +241,7 @@ xdr_read_cursor_skip(
             done += chunk;
 
             if (done < bytes && cursor->cur == cursor->last) {
-                return -1;
+                abort();
             }
 
             cursor->cur++;
@@ -255,259 +255,207 @@ xdr_read_cursor_skip(
 static FORCE_INLINE int
 __marshall_uint32_t(
     const uint32_t          *v,
-    int                      n,
     struct xdr_write_cursor *cursor)
 {
     uint32_t tmp;
-    int      i, rc;
+    int      rc;
 
-    for (i = 0; i < n; ++i) {
-        tmp = xdr_hton32(v[i]);
-        rc  = xdr_write_cursor_append(cursor, &tmp, 4);
+    tmp = xdr_hton32(*v);
 
-        if (unlikely(rc < 0)) {
-            return rc;
-        }
+    rc = xdr_write_cursor_append(cursor, &tmp, 4);
+
+    if (unlikely(rc < 0)) {
+        abort();
     }
 
-    return n << 2;
+    return 4;
 } /* __marshall_uint32_t */
 
 static FORCE_INLINE int
 __unmarshall_uint32_t(
     uint32_t               *v,
-    int                     n,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
     uint32_t tmp;
-    int      i, rc;
+    int      rc;
 
-    for (i = 0; i < n; ++i) {
+    rc = xdr_read_cursor_extract(cursor, &tmp, 4);
 
-        rc = xdr_read_cursor_extract(cursor, &tmp, 4);
-
-        if (unlikely(rc < 0)) {
-            return rc;
-        }
-
-        v[i] = xdr_ntoh32(tmp);
+    if (unlikely(rc < 0)) {
+        return rc;
     }
 
-    return n << 2;
+    *v = xdr_ntoh32(tmp);
+
+    return 4;
 } /* __unmarshall_uint32_t */
 
 static FORCE_INLINE int
 __marshall_int32_t(
     const int32_t           *v,
-    int                      n,
     struct xdr_write_cursor *cursor)
 {
     int32_t tmp;
-    int     i, rc;
+    int     rc;
 
-    for (i = 0; i < n; ++i) {
-        tmp = xdr_hton32(v[i]);
-        rc  = xdr_write_cursor_append(cursor, &tmp, 4);
+    tmp = xdr_hton32(*v);
+    rc  = xdr_write_cursor_append(cursor, &tmp, 4);
 
-        if (unlikely(rc < 0)) {
-            return rc;
-        }
+    if (unlikely(rc < 0)) {
+        abort();
     }
 
-    return n << 2;
+    return 4;
 } /* __marshall_int32_t */
 
 static FORCE_INLINE int
 __unmarshall_int32_t(
     int32_t                *v,
-    int                     n,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
     int32_t tmp;
-    int     i, rc;
+    int     rc;
 
-    for (i = 0; i < n; ++i) {
+    rc = xdr_read_cursor_extract(cursor, &tmp, 4);
 
-        rc = xdr_read_cursor_extract(cursor, &tmp, 4);
-
-        if (unlikely(rc < 0)) {
-            return rc;
-        }
-
-        v[i] = xdr_ntoh32(tmp);
+    if (unlikely(rc < 0)) {
+        return rc;
     }
 
-    return n << 2;
+    *v = xdr_ntoh32(tmp);
+
+    return 4;
 } /* __unmarshall_int32_t */
 
 static FORCE_INLINE int
 __marshall_uint64_t(
     const uint64_t          *v,
-    int                      n,
     struct xdr_write_cursor *cursor)
 {
     uint64_t tmp;
-    int      i, rc;
+    int      rc;
 
-    for (i = 0; i < n; ++i) {
-        tmp = xdr_hton64(v[i]);
-        rc  = xdr_write_cursor_append(cursor, &tmp, 8);
+    tmp = xdr_hton64(*v);
 
-        if (unlikely(rc < 0)) {
-            return rc;
-        }
+    rc = xdr_write_cursor_append(cursor, &tmp, 8);
+
+    if (unlikely(rc < 0)) {
+        abort();
     }
 
-    return n << 3;
+    return 8;
 } /* __marshall_uint64_t */
 
 static FORCE_INLINE int
 __unmarshall_uint64_t(
     uint64_t               *v,
-    int                     n,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
     uint64_t tmp;
-    int      i, rc;
+    int      rc;
 
-    for (i = 0; i < n; ++i) {
+    rc = xdr_read_cursor_extract(cursor, &tmp, 8);
 
-        rc = xdr_read_cursor_extract(cursor, &tmp, 8);
-
-        if (unlikely(rc < 0)) {
-            return rc;
-        }
-
-        v[i] = xdr_ntoh64(tmp);
+    if (unlikely(rc < 0)) {
+        return rc;
     }
 
-    return n << 3;
+    *v = xdr_ntoh64(tmp);
+
+    return 8;
 } /* __unmarshall_uint64_t */
 
 static FORCE_INLINE int
 __marshall_int64_t(
     const int64_t           *v,
-    int                      n,
     struct xdr_write_cursor *cursor)
 {
     int64_t tmp;
-    int     i, rc;
+    int     rc;
 
-    for (i = 0; i < n; ++i) {
-        tmp = xdr_hton64(v[i]);
-        rc  = xdr_write_cursor_append(cursor, &tmp, 8);
+    tmp = xdr_hton64(*v);
+    rc  = xdr_write_cursor_append(cursor, &tmp, 8);
 
-        if (unlikely(rc < 0)) {
-            return rc;
-        }
+    if (unlikely(rc < 0)) {
+        abort();
     }
 
-    return n << 3;
+    return 8;
 } /* __marshall_int64_t */
 
 static FORCE_INLINE int
 __unmarshall_int64_t(
     int64_t                *v,
-    int                     n,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
     int64_t tmp;
-    int     i, rc;
+    int     rc;
 
-    for (i = 0; i < n; ++i) {
+    rc = xdr_read_cursor_extract(cursor, &tmp, 8);
 
-        rc = xdr_read_cursor_extract(cursor, &tmp, 8);
-
-        if (unlikely(rc < 0)) {
-            return rc;
-        }
-
-        v[i] = xdr_ntoh64(tmp);
+    if (unlikely(rc < 0)) {
+        return rc;
     }
 
-    return n << 3;
+    *v = xdr_ntoh64(tmp);
+
+    return 8;
 } /* __unmarshall_int64_t */
 
 static FORCE_INLINE int
 __marshall_float(
     const float             *v,
-    int                      n,
     struct xdr_write_cursor *cursor)
 {
-    return xdr_write_cursor_append(cursor, v, n << 2);
+    return xdr_write_cursor_append(cursor, v, 4);
 } /* __marshall_float */
 
 static FORCE_INLINE int
 __unmarshall_float(
     float                  *v,
-    int                     n,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
-    return xdr_read_cursor_extract(cursor, v, n << 2);
+    return xdr_read_cursor_extract(cursor, v, 4);
 } /* __unmarshall_float */
 
 static FORCE_INLINE int
 __marshall_double(
     const double            *v,
-    int                      n,
     struct xdr_write_cursor *cursor)
 {
-    return xdr_write_cursor_append(cursor, v, n << 3);
+    return xdr_write_cursor_append(cursor, v, 8);
 } /* __marshall_double */
 
 static FORCE_INLINE int
 __unmarshall_double(
     double                 *v,
-    int                     n,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
-    return xdr_read_cursor_extract(cursor, v, n << 3);
+    return xdr_read_cursor_extract(cursor, v, 8);
 } /* __unmarshall_double */
 
 static FORCE_INLINE int
 __marshall_xdr_string(
     const xdr_string        *str,
-    int                      n,
     struct xdr_write_cursor *cursor)
 {
     const uint32_t zero = 0;
-    int            i, rc, pad, len = 0;
+    int            rc, pad, len = 0;
 
-    for (i = 0; i < n; ++i) {
+    len += __marshall_uint32_t(&str->len, cursor);
 
-        rc = __marshall_uint32_t(&str[i].len, 1, cursor);
+    len += xdr_write_cursor_append(cursor, str->str, str->len);
 
-        if (unlikely(rc < 0)) {
-            return rc;
-        }
+    pad = (4 - (len & 0x3)) & 0x3;
 
-        len += rc;
-
-        rc = xdr_write_cursor_append(cursor, str[i].str, str[i].len);
-
-        len += str[i].len;
-
-        if (unlikely(rc < 0)) {
-            return rc;
-        }
-
-        pad = (4 - (len & 0x3)) & 0x3;
-
-        if (pad) {
-            rc = xdr_write_cursor_append(cursor, &zero, pad);
-
-            if (unlikely(rc < 0)) {
-                return rc;
-            }
-
-            len += rc;
-        }
+    if (pad) {
+        len += xdr_write_cursor_append(cursor, &zero, pad);
     }
 
     return len;
@@ -516,47 +464,43 @@ __marshall_xdr_string(
 static FORCE_INLINE int
 __unmarshall_xdr_string(
     xdr_string             *str,
-    int                     n,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
-    int i, rc, pad, len = 0;
+    int rc, pad, len = 0;
 
-    for (i = 0; i < n; ++i) {
+    rc = __unmarshall_uint32_t(&str->len, cursor, dbuf);
 
-        rc = __unmarshall_uint32_t(&str[i].len, 1, cursor, dbuf);
+    if (unlikely(rc < 0)) {
+        return rc;
+    }
+
+    len += rc;
+
+    str->str = dbuf->buffer + dbuf->used;
+
+    dbuf->used += str->len + 1;
+
+    rc = xdr_read_cursor_extract(cursor, str->str, str->len);
+
+    if (unlikely(rc < 0)) {
+        return rc;
+    }
+
+    len += rc;
+
+    str->str[str->len] = '\0';
+
+    pad = (4 - (str->len & 0x3)) & 0x3;
+
+    if (pad) {
+        rc = xdr_read_cursor_skip(cursor, pad);
 
         if (unlikely(rc < 0)) {
             return rc;
         }
 
         len += rc;
-
-        str[i].str = dbuf->buffer + dbuf->used;
-
-        dbuf->used += str[i].len + 1;
-
-        rc = xdr_read_cursor_extract(cursor, str[i].str, str[i].len);
-
-        if (unlikely(rc < 0)) {
-            return rc;
-        }
-
-        str[i].str[str[i].len] = '\0';
-
-        len += str[i].len;
-
-        pad = (4 - (str[i].len & 0x3)) & 0x3;
-
-        if (pad) {
-            rc = xdr_read_cursor_skip(cursor, pad);
-
-            if (unlikely(rc < 0)) {
-                return rc;
-            }
-
-            len += rc;
-        }
     }
 
     return len;
@@ -582,7 +526,7 @@ __marshall_opaque_fixed(
         if (xdr_iovec_len(cursor->cur)) {
 
             if (unlikely(cursor->cur == cursor->last)) {
-                return -1;
+                abort();
             }
 
             cursor->cur++;
@@ -615,10 +559,6 @@ __marshall_opaque_fixed(
 
     if (pad) {
         rc = xdr_write_cursor_append(cursor, &zero, pad);
-
-        if (unlikely(rc < 0)) {
-            return rc;
-        }
     }
 
     return size + pad;
@@ -675,7 +615,7 @@ __marshall_opaque(
     int      rc, pad;
     uint32_t zero = 0;
 
-    rc = __marshall_uint32_t(&v->len, 1, cursor);
+    rc = __marshall_uint32_t(&v->len, cursor);
 
     if (unlikely(rc < 0)) {
         abort();
@@ -708,7 +648,7 @@ __marshall_opaque_zerocopy(
 {
     int rc;
 
-    rc = __marshall_uint32_t(&v->length, 1, cursor);
+    rc = __marshall_uint32_t(&v->length, cursor);
 
     if (unlikely(rc < 0)) {
         abort();
@@ -732,7 +672,7 @@ __unmarshall_opaque(
 {
     int rc, pad;
 
-    rc = __unmarshall_uint32_t(&v->len, 1, cursor, dbuf);
+    rc = __unmarshall_uint32_t(&v->len, cursor, dbuf);
 
     if (unlikely(rc < 0)) {
         return rc;
@@ -769,7 +709,7 @@ __unmarshall_opaque_zerocopy(
     int      rc;
     uint32_t size;
 
-    rc = __unmarshall_uint32_t(&size, 1, cursor, dbuf);
+    rc = __unmarshall_uint32_t(&size, cursor, dbuf);
 
     if (unlikely(rc < 0)) {
         return rc;
