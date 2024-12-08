@@ -609,7 +609,7 @@ __unmarshall_opaque_fixed(
 
     pad = (4 - (size & 0x3)) & 0x3;
 
-    xdr_read_cursor_skip(cursor, size + pad);
+    xdr_read_cursor_skip(cursor, pad);
 
     return size + pad;
 } /* __unmarshall_opaque_fixed */
