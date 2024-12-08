@@ -561,9 +561,22 @@ emit_program(
     struct xdr_version *version)
 {
     struct xdr_function *functionp;
+    int                  maxproc = 0;
 
     fprintf(source, "#include <core/evpl.h>\n");
     fprintf(source, "#include \"rpc2/rpc2_program.h\"\n");
+
+    fprintf(source, "const static char *%s_%s_procs[] = {\n",
+            program->name, version->name);
+    for (functionp = version->functions; functionp != NULL; functionp =
+             functionp->next) {
+        fprintf(source, "    [%d] = \"%s\",\n", functionp->id, functionp->name);
+        if (functionp->id > maxproc) {
+            maxproc = functionp->id;
+        }
+    }
+
+    fprintf(source, "};\n\n");
 
     fprintf(source, "static int\n");
     fprintf(source, "call_dispatch_%s(\n", version->name);
@@ -583,7 +596,11 @@ emit_program(
     for (functionp = version->functions; functionp != NULL; functionp =
              functionp->next) {
 
-        fprintf(source, "    case %s:\n", functionp->id);
+        if (functionp->id > maxproc) {
+            maxproc = functionp->id;
+        }
+
+        fprintf(source, "    case %d:\n", functionp->id);
 
         /* Check if the function is implemented */
         fprintf(source, "        if (prog->recv_call_%s == NULL) {\n",
@@ -665,6 +682,9 @@ emit_program(
     fprintf(source, "    memset(prog, 0, sizeof(*prog));\n");
     fprintf(source, "    prog->rpc2.program = %s;\n", program->id);
     fprintf(source, "    prog->rpc2.version = %s;\n", version->id);
+    fprintf(source, "    prog->rpc2.maxproc = %d;\n", maxproc);
+    fprintf(source, "    prog->rpc2.procs = %s_%s_procs;\n", program->name,
+            version->name);
     fprintf(source, "    prog->rpc2.program_data = prog;\n");
     fprintf(source, "    prog->rpc2.call_dispatch = call_dispatch_%s;\n",
             version->name);

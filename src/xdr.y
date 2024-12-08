@@ -169,7 +169,7 @@ function:
     type IDENTIFIER LPAREN type RPAREN EQUALS NUMBER SEMICOLON
     {
         $$ = xdr_alloc(sizeof(*$$));
-        $$->id = $7;
+        $$->id = atoi($7);
         $$->name = $2;
         $$->reply_type = $1;
         $$->call_type = $4;

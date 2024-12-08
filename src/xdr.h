@@ -94,7 +94,7 @@ struct xdr_union {
 };
 
 struct xdr_function {
-    const char          *id;
+    uint32_t             id;
     const char          *name;
     struct xdr_type     *call_type;
     struct xdr_type     *reply_type;
