@@ -580,7 +580,7 @@ __unmarshall_opaque_fixed(
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
-    int pad, left = size;
+    int pad, chunk, left = size;
 
     v->iov    = dbuf->buffer + dbuf->used;
     v->length = size;
@@ -590,19 +590,27 @@ __unmarshall_opaque_fixed(
 
         xdr_iovec_set_data(&v->iov[v->niov], xdr_iovec_data(cursor->cur) +
                            cursor->offset);
-        xdr_iovec_set_len(&v->iov[v->niov], xdr_iovec_len(cursor->cur));
-
         xdr_iovec_copy_private(&v->iov[v->niov], cursor->cur);
 
-        if (left < xdr_iovec_len(&v->iov[v->niov])) {
-            xdr_iovec_set_len(&v->iov[v->niov], left);
+        chunk = xdr_iovec_len(cursor->cur) - cursor->offset;
+
+        if (left < chunk) {
+            chunk = left;
         }
 
-        left -= xdr_iovec_len(&v->iov[v->niov]);
+        xdr_iovec_set_len(&v->iov[v->niov], chunk);
 
-        cursor->cur++;
-        cursor->offset = 0;
+        left -= chunk;
+
+        cursor->offset += chunk;
+
+        if (cursor->offset == xdr_iovec_len(cursor->cur)) {
+            cursor->cur++;
+            cursor->offset = 0;
+        }
+
         v->niov++;
+
     } while (left);
 
     dbuf->used += sizeof(xdr_iovec) * v->niov;
