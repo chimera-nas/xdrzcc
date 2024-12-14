@@ -28,7 +28,7 @@ main(
     msg1.inner1.value = 43;
     msg1.inner2.value = 44;
 
-    rc = marshall_MyMsg(&msg1, &iov_in, 1, &iov_out, &one, 0);
+    rc = marshall_MyMsg(&msg1, &iov_in, &iov_out, &one, 0);
 
     assert(rc == 12);
 

@@ -26,7 +26,7 @@ main(
 
     msg1.value = TWO;
 
-    rc = marshall_MyMsg(&msg1, &iov_in, 1, &iov_out, &one, 0);
+    rc = marshall_MyMsg(&msg1, &iov_in, &iov_out, &one, 0);
 
     assert(rc == 4);
 
