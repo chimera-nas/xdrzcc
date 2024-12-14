@@ -608,9 +608,11 @@ emit_program(
         /* Call has an argument */
         if (strcmp(functionp->call_type->name, "void")) {
             /* We will unmarshall argument into provided buffer */
-            fprintf(source, "        struct %s *%s_arg = msg->msg_buffer;\n",
+            fprintf(source, "        struct %s *%s_arg;\n",
                     functionp->call_type->name,
                     functionp->name);
+            fprintf(source, "        xdr_dbuf_alloc_space(%s_arg, sizeof(*%s_arg), msg->dbuf);\n",
+                    functionp->name, functionp->name);
             fprintf(source,
                     "        len = unmarshall_%s(%s_arg, iov, niov, msg->dbuf);\n",
                     functionp->call_type->name, functionp->name);
