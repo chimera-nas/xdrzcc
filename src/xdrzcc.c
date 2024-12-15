@@ -224,6 +224,7 @@ emit_unmarshall(
         fprintf(output, "        len += rc;\n");
         fprintf(output, "        rc = 0;\n");
         fprintf(output, "        if (more) {\n");
+        fprintf(output, "         xdr_dbuf_alloc_space(out->%s, sizeof(*out->%s), dbuf);\n", name, name);
         fprintf(output,
                 "        rc = __unmarshall_%s(out->%s, cursor, dbuf);\n",
                 type->name, name);
