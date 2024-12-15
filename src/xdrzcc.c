@@ -222,6 +222,7 @@ emit_unmarshall(
         ;
         fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "        len += rc;\n");
+        fprintf(output, "        rc = 0;\n");
         fprintf(output, "        if (more) {\n");
         fprintf(output,
                 "        rc = __unmarshall_%s(out->%s, cursor, dbuf);\n",
