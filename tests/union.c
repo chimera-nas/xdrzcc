@@ -39,6 +39,7 @@ main(
     assert(msg1.option1.value == msg2.option1.value);
 
     xdr_dbuf_reset(dbuf);
+    xdr_iovec_set_len(&iov_in, sizeof(buffer));
 
     msg1.opt = OPTION2;
     xdr_dbuf_strncpy(&msg1.option2, value, "1234567", 7, dbuf);
@@ -55,6 +56,8 @@ main(
     assert(strcmp(msg1.option2.value.str, msg2.option2.value.str) == 0);
 
     xdr_dbuf_reset(dbuf);
+    xdr_iovec_set_len(&iov_in, sizeof(buffer));
+
 
     msg1.opt = OPTION3;
 
