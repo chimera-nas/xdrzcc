@@ -282,6 +282,10 @@ emit_internal_headers(
     fprintf(source, "    struct %s *out,\n", name);
     fprintf(source, "    struct xdr_read_cursor *cursor,\n");
     fprintf(source, "    xdr_dbuf *dbuf);\n\n");
+
+    fprintf(source, "static int\n");
+    fprintf(source, "__marshall_length_%s(\n", name);
+    fprintf(source, "    const struct %s *in);\n", name);
 } /* emit_internal_headers */
 
 void
@@ -301,6 +305,8 @@ emit_wrapper_headers(
     fprintf(header, "    const xdr_iovec *iov,\n");
     fprintf(header, "    int niov,\n");
     fprintf(header, "    xdr_dbuf *dbuf);\n\n");
+
+    fprintf(header, "int marshall_length_%s(const struct %s *in);\n\n", name, name);
 } /* emit_wrapper_headers */
 
 void
@@ -409,6 +415,52 @@ emit_dump_member(
 } /* emit_dump_member */
 
 void
+emit_length_member(
+    FILE            *source,
+    const char      *name,
+    struct xdr_type *type)
+{
+    struct xdr_type       *emit_type;
+    struct xdr_identifier *chk;
+
+    HASH_FIND_STR(xdr_identifiers, type->name, chk);
+
+    if (chk && chk->type == XDR_TYPEDEF) {
+        emit_type = ((struct xdr_typedef *) chk->ptr)->type;
+    } else {
+        emit_type = type;
+    }
+
+    if (emit_type->opaque) {
+        if (emit_type->array) {
+            fprintf(source, "    length += xdr_pad(%s);\n", emit_type->array_size);
+        } else if (emit_type->zerocopy) {
+            fprintf(source, "    length += 4 + xdr_pad(in->%s.length);\n", name);
+        } else {
+            fprintf(source, "    length += 4 + xdr_pad(in->%s.len);\n", name);
+        }
+    } else if (strcmp(emit_type->name, "xdr_string") == 0) {
+        fprintf(source, "    length += 4 + xdr_pad(in->%s.len);\n", name);
+    } else if (emit_type->vector) {
+        fprintf(source, "    length += 4;\n");
+        fprintf(source, "    for (int i = 0; i < in->num_%s; i++) {\n", name);
+        fprintf(source, "        length += __marshall_length_%s(&in->%s[i]);\n", type->name, name);
+        fprintf(source, "    }\n");
+    } else if (emit_type->optional) {
+        fprintf(source, "    length += 4;\n");
+        fprintf(source, "    if (in->%s) {\n", name);
+        fprintf(source, "        length += __marshall_length_%s(in->%s);\n", type->name, name);
+        fprintf(source, "    }\n");
+    } else if (emit_type->array) {
+        fprintf(source, "    for (int i = 0; i < %s; i++) {\n", emit_type->array_size);
+        fprintf(source, "        length += __marshall_length_%s(&in->%s[i]);\n", type->name, name);
+        fprintf(source, "    }\n");
+    } else {
+        fprintf(source, "    length += __marshall_length_%s(&in->%s);\n", type->name, name);
+    }
+} /* emit_length_member */
+
+void
 emit_dump_internal(
     FILE       *source,
     const char *name)
@@ -449,6 +501,35 @@ emit_dump_struct(
     fprintf(source, "    _dump_%s(\"\", \"%s\", in);\n", name, name);
     fprintf(source, "}\n\n");
 } /* emit_dump_struct */
+
+void
+emit_length_struct(
+    FILE              *source,
+    const char        *name,
+    struct xdr_struct *xdr_structp)
+{
+    struct xdr_struct_member *member;
+
+    fprintf(source,
+            "static int __marshall_length_%s(const struct %s *in)\n",
+            name, name);
+
+    fprintf(source, "{\n");
+    fprintf(source, "    uint32_t length = 0;\n");
+
+    DL_FOREACH(xdr_structp->members, member)
+    {
+        emit_length_member(source, member->name, member->type);
+    }
+    fprintf(source, "    return length;\n");
+    fprintf(source, "}\n\n");
+
+    fprintf(source, "int marshall_length_%s(const struct %s *in)\n",
+            name, name);
+    fprintf(source, "{\n");
+    fprintf(source, "    return __marshall_length_%s(in);\n", name);
+    fprintf(source, "}\n\n");
+} /* emit_length_struct */
 
 void
 emit_dump_union(
@@ -497,6 +578,52 @@ emit_dump_union(
     fprintf(source, "    _dump_%s(\"\", \"%s\", in);\n", name, name);
     fprintf(source, "}\n\n");
 } /* emit_dump_union */
+
+void
+emit_length_union(
+    FILE             *source,
+    const char       *name,
+    struct xdr_union *xdr_unionp)
+{
+    struct xdr_union_case *casep;
+
+    fprintf(source,
+            "static int __marshall_length_%s(const struct %s *in)\n",
+            name, name);
+    fprintf(source, "{\n");
+    fprintf(source, "    uint32_t length = 0;\n");
+    emit_length_member(source, xdr_unionp->pivot_name, xdr_unionp->pivot_type);
+    fprintf(source, "    switch (in->%s) {\n", xdr_unionp->pivot_name);
+
+    DL_FOREACH(xdr_unionp->cases, casep)
+    {
+        if (strcmp(casep->label, "default") != 0) {
+            fprintf(source, "    case %s:\n", casep->label);
+            if (casep->type) {
+                emit_length_member(source, casep->name, casep->type);
+            }
+            fprintf(source, "        break;\n");
+        }
+    }
+
+    DL_FOREACH(xdr_unionp->cases, casep)
+    {
+        if (strcmp(casep->label, "default") == 0) {
+            fprintf(source, "    default:\n");
+            fprintf(source, "        break;\n");
+        }
+    }
+
+    fprintf(source, "    }\n");
+    fprintf(source, "    return length;\n");
+    fprintf(source, "}\n\n");
+
+    fprintf(source, "int marshall_length_%s(const struct %s *in)\n",
+            name, name);
+    fprintf(source, "{\n");
+    fprintf(source, "    return __marshall_length_%s(in);\n", name);
+    fprintf(source, "}\n\n");
+} /* emit_length_union */
 
 void
 emit_program_header(
@@ -656,9 +783,10 @@ emit_program(
                     "    niov = evpl_iovec_reserve(evpl, 128*1024, 8, 1, &iov);\n");
             fprintf(source, "    if (unlikely(niov != 1)) return;\n");
             fprintf(source,
-                    "    len = marshall_%s(arg, &iov, msg_iov, &msg_niov, 0);\n",
+                    "    len = marshall_%s(arg, &iov, msg_iov, &msg_niov, msg->program->reserve);\n",
                     functionp->reply_type->name);
             fprintf(source, "    if (unlikely(len < 0)) abort();\n");
+            fprintf(source, "    xdr_iovec_set_len(&iov, len + msg->program->reserve);\n");
             fprintf(source,
                     "    evpl_iovec_commit(evpl, 0, &iov, 1);\n");
             fprintf(source,
@@ -669,8 +797,11 @@ emit_program(
                     functionp->name);
             fprintf(source, "{\n");
             fprintf(source, "    struct evpl_rpc2_msg *msg = private_data;\n");
+            fprintf(source, "    struct evpl_iovec iov;\n");
+            fprintf(source, "    int niov, len;\n");
+            fprintf(source, "    niov = evpl_iovec_alloc(evpl, msg->program->reserve, 8, 1, &iov);\n");
             fprintf(source,
-                    "    msg->program->reply_dispatch(evpl, msg, NULL, 0, 0);\n")
+                    "    msg->program->reply_dispatch(evpl, msg, &iov, niov, msg->program->reserve);\n")
             ;
         }
 
@@ -684,6 +815,7 @@ emit_program(
     fprintf(source, "    prog->rpc2.program = %s;\n", program->id);
     fprintf(source, "    prog->rpc2.version = %s;\n", version->id);
     fprintf(source, "    prog->rpc2.maxproc = %d;\n", maxproc);
+    fprintf(source, "    prog->rpc2.reserve = 256;\n");
     fprintf(source, "    prog->rpc2.procs = %s_%s_procs;\n", program->name,
             version->name);
     fprintf(source, "    prog->rpc2.program_data = prog;\n");
@@ -1254,6 +1386,7 @@ main(
         emit_wrappers(source, xdr_structp->name);
 
         emit_dump_struct(source, xdr_structp->name, xdr_structp);
+        emit_length_struct(source, xdr_structp->name, xdr_structp);
     } /* main */
 
     DL_FOREACH(xdr_unions, xdr_unionp)
@@ -1338,6 +1471,7 @@ main(
         emit_wrappers(source, xdr_unionp->name);
 
         emit_dump_union(source, xdr_unionp->name, xdr_unionp);
+        emit_length_union(source, xdr_unionp->name, xdr_unionp);
     }
 
     if (emit_rpc2) {

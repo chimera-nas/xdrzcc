@@ -68,6 +68,12 @@ xdr_ntoh64(uint64_t value)
 #endif /* if __BYTE_ORDER == __LITTLE_ENDIAN */
 } /* xdr_ntoh64 */
 
+static FORCE_INLINE uint32_t
+xdr_pad(uint32_t length)
+{
+    return (4 - (length & 0x3)) & 0x3;
+} /* xdr_pad */
+
 struct xdr_read_cursor {
     const xdr_iovec *cur;
     const xdr_iovec *last;
@@ -233,6 +239,42 @@ xdr_read_cursor_skip(
 
     return bytes;
 } /* xdr_read_cursor_skip */
+
+static FORCE_INLINE uint32_t
+__marshall_length_uint32_t(const uint32_t *v)
+{
+    return 4;
+} /* __marshall_length_uint32_t */
+
+static FORCE_INLINE uint32_t
+__marshall_length_int32_t(const int32_t *v)
+{
+    return 4;
+} /* __unmarshall_length_int32_t */
+
+static FORCE_INLINE uint32_t
+__marshall_length_uint64_t(const uint64_t *v)
+{
+    return 8;
+} /* __marshall_length_uint64_t */
+
+static FORCE_INLINE uint32_t
+__marshall_length_int64_t(const int64_t *v)
+{
+    return 8;
+} /* __marshall_length_int64_t */
+
+static FORCE_INLINE uint32_t
+__marshall_length_float(const float *v)
+{
+    return 4;
+} /* __marshall_length_float */
+
+static FORCE_INLINE uint32_t
+__marshall_length_double(const double *v)
+{
+    return 8;
+} /* __marshall_length_double */
 
 static FORCE_INLINE void
 __marshall_uint32_t(
