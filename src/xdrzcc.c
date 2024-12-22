@@ -341,6 +341,7 @@ emit_wrapper_headers(
     fprintf(header, "    xdr_iovec *iov_in,\n");
     fprintf(header, "    xdr_iovec *iov_out,\n");
     fprintf(header, "    int *niov_out,\n");
+    fprintf(header, "    struct evpl_rpc2_rdma_chunk *write_chunk,\n");
     fprintf(header, "    int out_offset);\n\n");
 
     fprintf(header, "int unmarshall_%s(\n", name);
@@ -827,7 +828,7 @@ emit_program(
                     "    niov = evpl_iovec_reserve(evpl, 128*1024, 8, 1, &iov);\n");
             fprintf(source, "    if (unlikely(niov != 1)) return;\n");
             fprintf(source,
-                    "    len = marshall_%s(arg, &iov, msg_iov, &msg_niov, msg->program->reserve);\n",
+                    "    len = marshall_%s(arg, &iov, msg_iov, &msg_niov, &msg->write_chunk, msg->program->reserve);\n",
                     functionp->reply_type->name);
             fprintf(source, "    if (unlikely(len < 0)) abort();\n");
             fprintf(source, "    xdr_iovec_set_len(&iov, len + msg->program->reserve);\n");
@@ -963,10 +964,11 @@ emit_wrappers(
     fprintf(source, "    xdr_iovec *iov_in,\n");
     fprintf(source, "    xdr_iovec *iov_out,\n");
     fprintf(source, "    int *niov_out,\n");
+    fprintf(source, "    struct evpl_rpc2_rdma_chunk *write_chunk,\n");
     fprintf(source, "    int out_offset) {\n");
     fprintf(source, "    struct xdr_write_cursor cursor;\n");
     fprintf(source,
-            "    xdr_write_cursor_init(&cursor, iov_in, iov_out, *niov_out, out_offset);\n");
+            "    xdr_write_cursor_init(&cursor, iov_in, iov_out, *niov_out, write_chunk, out_offset);\n");
     fprintf(source, "    __marshall_%s(out, &cursor);\n", name);
     fprintf(source, "    xdr_write_cursor_flush(&cursor);\n");
     fprintf(source, "    *niov_out = cursor.niov;\n");

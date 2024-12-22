@@ -35,7 +35,7 @@ main(
     assert(xdr_iovec_len(msg1.data.iov) == 7);
     assert(memcmp(xdr_iovec_data(msg1.data.iov), data, 7) == 0);
 
-    rc = marshall_MyMsg(&msg1, &iov_in, iov_out, &niov_out, 0);
+    rc = marshall_MyMsg(&msg1, &iov_in, iov_out, &niov_out, NULL, 0);
 
     assert(niov_out == 3);
     assert(rc == 12);

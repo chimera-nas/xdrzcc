@@ -89,14 +89,15 @@ struct xdr_read_cursor {
 };
 
 struct xdr_write_cursor {
-    xdr_iovec *iov;
-    int        niov;
-    int        maxiov;
-    xdr_iovec *scratch_iov;
-    void      *scratch_data;
-    int        scratch_size;
-    int        scratch_used;
-    int        total;
+    xdr_iovec                   *iov;
+    int                          niov;
+    int                          maxiov;
+    xdr_iovec                   *scratch_iov;
+    void                        *scratch_data;
+    int                          scratch_size;
+    int                          scratch_used;
+    int                          total;
+    struct evpl_rpc2_rdma_chunk *write_chunk;
 };
 
 static FORCE_INLINE void
@@ -115,16 +116,18 @@ xdr_read_cursor_init(
 
 static FORCE_INLINE void
 xdr_write_cursor_init(
-    struct xdr_write_cursor *cursor,
-    xdr_iovec               *scratch_iov,
-    xdr_iovec               *out_iov,
-    int                      out_niov,
-    int                      out_offset)
+    struct xdr_write_cursor     *cursor,
+    xdr_iovec                   *scratch_iov,
+    xdr_iovec                   *out_iov,
+    int                          out_niov,
+    struct evpl_rpc2_rdma_chunk *write_chunk,
+    int                          out_offset)
 {
     cursor->iov         = out_iov;
     cursor->niov        = 0;
     cursor->maxiov      = out_niov;
     cursor->scratch_iov = scratch_iov;
+    cursor->write_chunk = write_chunk;
 
     cursor->scratch_used = out_offset;
     cursor->scratch_data = xdr_iovec_data(scratch_iov);
@@ -614,6 +617,19 @@ __marshall_opaque_zerocopy(
 
     __marshall_uint32_t(&v->length, cursor);
 
+#if EVPL_RPC2
+    if (cursor->write_chunk && cursor->write_chunk->length) {
+        cursor->write_chunk->iov          = v->iov;
+        cursor->write_chunk->niov         = v->niov;
+        cursor->write_chunk->length       = v->length;
+        cursor->write_chunk->xdr_position = cursor->scratch_used + cursor->total;
+        fprintf(stderr, "write chunk: offset %d, length %d\n", cursor->write_chunk->xdr_position, cursor->write_chunk->
+                length);
+
+        return;
+    }
+ #endif /* if EVPL_RPC2 */
+
     xdr_write_cursor_flush(cursor);
 
     for (i = 0; i < v->niov && left; ++i) {
@@ -713,7 +729,7 @@ __unmarshall_opaque_zerocopy(
     }
 
 #if EVPL_RPC2
-    if (cursor->read_chunk) {
+    if (cursor->read_chunk && cursor->read_chunk->length) {
         chunk = cursor->read_chunk;
         fprintf(stderr, "rdma chunk: offset %d, length %d\n", chunk->xdr_position, chunk->length);
 

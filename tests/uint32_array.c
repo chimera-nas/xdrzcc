@@ -28,7 +28,7 @@ main(
 
     dbuf = xdr_dbuf_alloc();
 
-    rc = marshall_MyMsg(&msg1, &iov_in, &iov_out, &one, 0);
+    rc = marshall_MyMsg(&msg1, &iov_in, &iov_out, &one, NULL, 0);
 
     assert(rc == 64);
 
