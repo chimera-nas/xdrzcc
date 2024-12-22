@@ -251,7 +251,7 @@ emit_unmarshall(
         fprintf(output, "        }\n");
         fprintf(output, "         last = current;\n");
         fprintf(output, "        last->%s = NULL;\n", liststruct->nextmember);
-        fprintf(output, "        __unmarshall_uint32_t(&more, cursor, dbuf);\n");
+        fprintf(output, "         rc = __unmarshall_uint32_t(&more, cursor, dbuf);\n");
         fprintf(output, "         if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "         len += rc;\n");
         fprintf(output, "        }\n");

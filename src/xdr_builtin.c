@@ -492,6 +492,7 @@ __unmarshall_xdr_string(
     if (xdr_iovec_len(cursor->cur) - cursor->iov_offset >= str->len) {
         str->str            = xdr_iovec_data(cursor->cur) + cursor->iov_offset;
         cursor->iov_offset += str->len;
+        cursor->offset     += str->len;
 
         if (cursor->iov_offset == xdr_iovec_len(cursor->cur)) {
             cursor->cur++;
@@ -560,7 +561,7 @@ __unmarshall_opaque_fixed(
         left -= chunk;
 
         cursor->iov_offset += chunk;
-
+        cursor->offset     += chunk;
         if (cursor->iov_offset == xdr_iovec_len(cursor->cur)) {
             cursor->cur++;
             cursor->iov_offset = 0;
@@ -662,7 +663,7 @@ __unmarshall_opaque(
     if (xdr_iovec_len(cursor->cur) - cursor->iov_offset >= v->len) {
         v->data             = xdr_iovec_data(cursor->cur) + cursor->iov_offset;
         cursor->iov_offset += v->len;
-
+        cursor->offset     += v->len;
         if (cursor->iov_offset == xdr_iovec_len(cursor->cur)) {
             cursor->cur++;
             cursor->iov_offset = 0;
