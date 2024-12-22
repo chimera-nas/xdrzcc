@@ -31,7 +31,7 @@ main(
 
     assert(rc == 8);
 
-    rc = unmarshall_MyMsg(&msg2, &iov_out, one, dbuf);
+    rc = unmarshall_MyMsg(&msg2, &iov_out, one, NULL, 0, dbuf);
 
     assert(rc == 8);
 
@@ -48,7 +48,7 @@ main(
 
     assert(rc == 16);
 
-    rc = unmarshall_MyMsg(&msg2, &iov_out, one, dbuf);
+    rc = unmarshall_MyMsg(&msg2, &iov_out, one, NULL, 0, dbuf);
 
     assert(rc == 16);
 
@@ -65,7 +65,7 @@ main(
 
     assert(rc == 4);
 
-    rc = unmarshall_MyMsg(&msg2, &iov_out, one, dbuf);
+    rc = unmarshall_MyMsg(&msg2, &iov_out, one, NULL, 0, dbuf);
 
     assert(rc == 4);
 

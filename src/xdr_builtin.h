@@ -7,6 +7,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
+struct evpl_rpc2_rdma_segment;
 #ifndef XDR_MAX_DBUF
 #define XDR_MAX_DBUF 4096
 #endif

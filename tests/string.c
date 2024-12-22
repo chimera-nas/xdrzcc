@@ -32,7 +32,7 @@ main(
 
     assert(rc == 36);
 
-    rc = unmarshall_MyMsg(&msg2, &iov_out, one, dbuf);
+    rc = unmarshall_MyMsg(&msg2, &iov_out, one, NULL, 0, dbuf);
 
     fprintf(stderr, "unmarshalled to %d bytes %d niov\n", rc, one);
 

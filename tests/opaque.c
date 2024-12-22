@@ -44,7 +44,7 @@ main(
     for (int i = 0; i < niov_out; ++i) {
         fprintf(stderr, "iov_out[%d] = %d\n", i, xdr_iovec_len(&iov_out[i]));
     }
-    rc = unmarshall_MyMsg(&msg2, iov_out, niov_out, dbuf);
+    rc = unmarshall_MyMsg(&msg2, iov_out, niov_out, NULL, 0, dbuf);
 
     assert(rc == 12);
 

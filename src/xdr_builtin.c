@@ -75,9 +75,12 @@ xdr_pad(uint32_t length)
 } /* xdr_pad */
 
 struct xdr_read_cursor {
-    const xdr_iovec *cur;
-    const xdr_iovec *last;
-    unsigned int     offset;
+    const xdr_iovec               *cur;
+    const xdr_iovec               *last;
+    unsigned int                   iov_offset;
+    unsigned int                   offset;
+    struct evpl_rpc2_rdma_segment *rdma_segments;
+    int                            num_rdma_segments;
 };
 
 struct xdr_write_cursor {
@@ -93,13 +96,18 @@ struct xdr_write_cursor {
 
 static FORCE_INLINE void
 xdr_read_cursor_init(
-    struct xdr_read_cursor *cursor,
-    const xdr_iovec        *iov,
-    int                     niov)
+    struct xdr_read_cursor        *cursor,
+    const xdr_iovec               *iov,
+    int                            niov,
+    struct evpl_rpc2_rdma_segment *rdma_segments,
+    int                            num_rdma_segments)
 {
-    cursor->cur    = iov;
-    cursor->last   = iov + (niov - 1);
-    cursor->offset = 0;
+    cursor->cur               = iov;
+    cursor->last              = iov + (niov - 1);
+    cursor->iov_offset        = 0;
+    cursor->offset            = 0;
+    cursor->rdma_segments     = rdma_segments;
+    cursor->num_rdma_segments = num_rdma_segments;
 } /* xdr_read_cursor_init */
 
 static FORCE_INLINE void
@@ -163,29 +171,27 @@ xdr_read_cursor_extract(
     left = bytes;
 
     while (left) {
-
-        chunk = xdr_iovec_len(cursor->cur) - cursor->offset;
-
+        chunk = xdr_iovec_len(cursor->cur) - cursor->iov_offset;
         if (left < chunk) {
             chunk = left;
         }
 
         memcpy(out,
-               xdr_iovec_data(cursor->cur) + cursor->offset,
+               xdr_iovec_data(cursor->cur) + cursor->iov_offset,
                chunk);
 
-        left           -= chunk;
-        out            += chunk;
-        cursor->offset += chunk;
+        left               -= chunk;
+        out                 = (char *) out + chunk;
+        cursor->iov_offset += chunk;
+        cursor->offset     += chunk;
 
-        if (cursor->offset == xdr_iovec_len(cursor->cur)) {
+        if (cursor->iov_offset == xdr_iovec_len(cursor->cur)) {
             cursor->cur++;
-            cursor->offset = 0;
+            cursor->iov_offset = 0;
         }
     }
 
     return bytes;
-
 } /* xdr_read_cursor_extract */
 
 static inline void
@@ -212,28 +218,29 @@ xdr_read_cursor_skip(
 {
     unsigned int done, chunk;
 
-    if (cursor->offset + bytes <= xdr_iovec_len(cursor->cur)) {
-        cursor->offset += bytes;
+    if (cursor->iov_offset + bytes <= xdr_iovec_len(cursor->cur)) {
+        cursor->iov_offset += bytes;
+        cursor->offset     += bytes;
     } else {
-
         done = 0;
-
         while (done < bytes) {
-
-            chunk = xdr_iovec_len(cursor->cur) - cursor->offset;
-
+            chunk = xdr_iovec_len(cursor->cur) - cursor->iov_offset;
             if (chunk > bytes - done) {
                 chunk = bytes - done;
             }
 
-            done += chunk;
+            done               += chunk;
+            cursor->iov_offset += chunk;
+            cursor->offset     += chunk;
 
             if (done < bytes && cursor->cur == cursor->last) {
                 abort();
             }
 
-            cursor->cur++;
-            cursor->offset = 0;
+            if (cursor->iov_offset == xdr_iovec_len(cursor->cur)) {
+                cursor->cur++;
+                cursor->iov_offset = 0;
+            }
         }
     }
 
@@ -482,13 +489,13 @@ __unmarshall_xdr_string(
 
     len += rc;
 
-    if (xdr_iovec_len(cursor->cur) - cursor->offset >= str->len) {
-        str->str        = xdr_iovec_data(cursor->cur) + cursor->offset;
-        cursor->offset += str->len;
+    if (xdr_iovec_len(cursor->cur) - cursor->iov_offset >= str->len) {
+        str->str            = xdr_iovec_data(cursor->cur) + cursor->iov_offset;
+        cursor->iov_offset += str->len;
 
-        if (cursor->offset == xdr_iovec_len(cursor->cur)) {
+        if (cursor->iov_offset == xdr_iovec_len(cursor->cur)) {
             cursor->cur++;
-            cursor->offset = 0;
+            cursor->iov_offset = 0;
         }
 
     } else {
@@ -539,10 +546,10 @@ __unmarshall_opaque_fixed(
     do {
 
         xdr_iovec_set_data(&v->iov[v->niov], xdr_iovec_data(cursor->cur) +
-                           cursor->offset);
+                           cursor->iov_offset);
         xdr_iovec_copy_private(&v->iov[v->niov], cursor->cur);
 
-        chunk = xdr_iovec_len(cursor->cur) - cursor->offset;
+        chunk = xdr_iovec_len(cursor->cur) - cursor->iov_offset;
 
         if (left < chunk) {
             chunk = left;
@@ -552,11 +559,11 @@ __unmarshall_opaque_fixed(
 
         left -= chunk;
 
-        cursor->offset += chunk;
+        cursor->iov_offset += chunk;
 
-        if (cursor->offset == xdr_iovec_len(cursor->cur)) {
+        if (cursor->iov_offset == xdr_iovec_len(cursor->cur)) {
             cursor->cur++;
-            cursor->offset = 0;
+            cursor->iov_offset = 0;
         }
 
         v->niov++;
@@ -652,13 +659,13 @@ __unmarshall_opaque(
         return rc;
     }
 
-    if (xdr_iovec_len(cursor->cur) - cursor->offset >= v->len) {
-        v->data         = xdr_iovec_data(cursor->cur) + cursor->offset;
-        cursor->offset += v->len;
+    if (xdr_iovec_len(cursor->cur) - cursor->iov_offset >= v->len) {
+        v->data             = xdr_iovec_data(cursor->cur) + cursor->iov_offset;
+        cursor->iov_offset += v->len;
 
-        if (cursor->offset == xdr_iovec_len(cursor->cur)) {
+        if (cursor->iov_offset == xdr_iovec_len(cursor->cur)) {
             cursor->cur++;
-            cursor->offset = 0;
+            cursor->iov_offset = 0;
         }
 
     } else {
@@ -691,8 +698,25 @@ __unmarshall_opaque_zerocopy(
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
-    int      rc;
-    uint32_t size;
+    int                            rc, i;
+    uint32_t                       size;
+    struct evpl_rpc2_rdma_segment *segment;
+
+#if EVPL_RPC2
+    fprintf(stderr, "unmarshalling opaque zerocopy at offset %d\n", cursor->offset);
+
+    for (i = 0; i < cursor->num_rdma_segments; i++) {
+        segment = &cursor->rdma_segments[i];
+
+        fprintf(stderr, "rdma segment %d: offset %d, length %d\n", i, segment->xdr_position, segment->length);
+
+        if (segment->xdr_position == cursor->offset) {
+            fprintf(stderr, "matched rdma segment\n");
+            v->length = segment->length;
+            return 0;
+        }
+    }
+#endif /* if EVPL_RPC2 */
 
     rc = __unmarshall_uint32_t(&size, cursor, dbuf);
 
