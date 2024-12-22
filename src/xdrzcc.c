@@ -250,11 +250,11 @@ emit_unmarshall(
         fprintf(output, "             out->%s = current;\n", name);
         fprintf(output, "        }\n");
         fprintf(output, "         last = current;\n");
+        fprintf(output, "        last->%s = NULL;\n", liststruct->nextmember);
         fprintf(output, "        __unmarshall_uint32_t(&more, cursor, dbuf);\n");
         fprintf(output, "         if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "         len += rc;\n");
         fprintf(output, "        }\n");
-        fprintf(output, "        last->%s = NULL;\n", liststruct->nextmember);
         fprintf(output, "        rc = 0;\n");
         fprintf(output, "    }\n");
     } else if (type->optional) {
@@ -1424,6 +1424,12 @@ main(
 
         DL_FOREACH(xdr_structp->members, xdr_struct_memberp)
         {
+
+            if (xdr_structp->linkedlist &&
+                strncmp(xdr_struct_memberp->name, "next", 4) == 0) {
+                continue;
+            }
+
             emit_unmarshall(source, xdr_struct_memberp->name, xdr_struct_memberp
                             ->type);
         }
