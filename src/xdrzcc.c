@@ -195,6 +195,8 @@ emit_unmarshall(
     const char      *name,
     struct xdr_type *type)
 {
+    struct xdr_identifier *chk;
+    struct xdr_struct     *liststruct;
 
     if (type->opaque) {
         if (type->array) {
@@ -214,6 +216,47 @@ emit_unmarshall(
         fprintf(output,
                 "    rc = __unmarshall_%s(&out->%s, cursor, dbuf);\n",
                 type->name, name);
+    } else if (type->linkedlist) {
+
+        HASH_FIND_STR(xdr_identifiers, type->name, chk);
+
+        if (!chk) {
+            fprintf(stderr, "Linked list '%s' not found.\n", type->name);
+            exit(1);
+        }
+
+        liststruct = (struct xdr_struct *) chk->ptr;
+
+        fprintf(output, "    {\n");
+        fprintf(output, "            uint32_t more;\n");
+        fprintf(output,
+                "        rc = __unmarshall_uint32_t(&more, cursor, dbuf);\n")
+        ;
+        fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "        len += rc;\n");
+
+        fprintf(output, "        out->%s = NULL;\n", name);
+        fprintf(output, "        struct %s *current = NULL, *last = NULL;\n", type->name);
+        fprintf(output, "        while (more) {\n");
+        fprintf(output, "          xdr_dbuf_alloc_space(current, sizeof(*current), dbuf);\n");
+        fprintf(output,
+                "        rc = __unmarshall_%s(current, cursor, dbuf);\n",
+                type->name);
+        fprintf(output, "         if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "         len += rc;\n");
+        fprintf(output, "         if (last) {\n");
+        fprintf(output, "             last->%s = current;\n", liststruct->nextmember);
+        fprintf(output, "         } else {\n");
+        fprintf(output, "             out->%s = current;\n", name);
+        fprintf(output, "        }\n");
+        fprintf(output, "         last = current;\n");
+        fprintf(output, "        __unmarshall_uint32_t(&more, cursor, dbuf);\n");
+        fprintf(output, "         if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "         len += rc;\n");
+        fprintf(output, "        }\n");
+        fprintf(output, "        last->%s = NULL;\n", liststruct->nextmember);
+        fprintf(output, "        rc = 0;\n");
+        fprintf(output, "    }\n");
     } else if (type->optional) {
         fprintf(output, "    {\n");
         fprintf(output, "        uint32_t more;\n");
