@@ -722,7 +722,7 @@ __unmarshall_opaque_zerocopy(
             v->iov    = chunk->iov;
             v->niov   = chunk->niov;
             v->length = chunk->length;
-            return 0;
+            return 4;
         }
     }
 #endif /* if EVPL_RPC2 */
