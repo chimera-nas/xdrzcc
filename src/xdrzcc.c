@@ -271,7 +271,9 @@ emit_unmarshall(
         fprintf(output,
                 "        rc = __unmarshall_%s(out->%s, cursor, dbuf);\n",
                 type->name, name);
-        fprintf(output, "        }\n");
+        fprintf(output, "        } else {\n");
+        fprintf(output, "            out->%s = NULL;\n", name);
+        fprintf(output, "        };\n");
         fprintf(output, "    }\n");
     } else if (type->vector) {
         fprintf(output,
