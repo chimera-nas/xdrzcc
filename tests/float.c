@@ -30,7 +30,7 @@ main(
 
     assert(rc == 4);
 
-    rc = unmarshall_MyMsg(&msg2, &iov_out, one, NULL, 0, dbuf);
+    rc = unmarshall_MyMsg(&msg2, &iov_out, one, NULL, dbuf);
 
     assert(rc == 4);
 

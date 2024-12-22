@@ -81,12 +81,11 @@ xdr_pad(uint32_t length)
 } /* xdr_pad */
 
 struct xdr_read_cursor {
-    const xdr_iovec               *cur;
-    const xdr_iovec               *last;
-    unsigned int                   iov_offset;
-    unsigned int                   offset;
-    struct evpl_rpc2_rdma_segment *rdma_segments;
-    int                            num_rdma_segments;
+    const xdr_iovec             *cur;
+    const xdr_iovec             *last;
+    unsigned int                 iov_offset;
+    unsigned int                 offset;
+    struct evpl_rpc2_rdma_chunk *read_chunk;
 };
 
 struct xdr_write_cursor {
@@ -102,18 +101,16 @@ struct xdr_write_cursor {
 
 static FORCE_INLINE void
 xdr_read_cursor_init(
-    struct xdr_read_cursor        *cursor,
-    const xdr_iovec               *iov,
-    int                            niov,
-    struct evpl_rpc2_rdma_segment *rdma_segments,
-    int                            num_rdma_segments)
+    struct xdr_read_cursor      *cursor,
+    const xdr_iovec             *iov,
+    int                          niov,
+    struct evpl_rpc2_rdma_chunk *read_chunk)
 {
-    cursor->cur               = iov;
-    cursor->last              = iov + (niov - 1);
-    cursor->iov_offset        = 0;
-    cursor->offset            = 0;
-    cursor->rdma_segments     = rdma_segments;
-    cursor->num_rdma_segments = num_rdma_segments;
+    cursor->cur        = iov;
+    cursor->last       = iov + (niov - 1);
+    cursor->iov_offset = 0;
+    cursor->offset     = 0;
+    cursor->read_chunk = read_chunk;
 } /* xdr_read_cursor_init */
 
 static FORCE_INLINE void
@@ -705,9 +702,9 @@ __unmarshall_opaque_zerocopy(
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
-    int                            rc, i;
-    uint32_t                       size;
-    struct evpl_rpc2_rdma_segment *segment;
+    int                          rc;
+    uint32_t                     size;
+    struct evpl_rpc2_rdma_chunk *chunk;
 
     rc = __unmarshall_uint32_t(&size, cursor, dbuf);
 
@@ -716,16 +713,15 @@ __unmarshall_opaque_zerocopy(
     }
 
 #if EVPL_RPC2
-    for (i = 0; i < cursor->num_rdma_segments; i++) {
-        segment = &cursor->rdma_segments[i];
+    if (cursor->read_chunk) {
+        chunk = cursor->read_chunk;
+        fprintf(stderr, "rdma chunk: offset %d, length %d\n", chunk->xdr_position, chunk->length);
 
-        fprintf(stderr, "rdma segment %d: offset %d, length %d\n", i, segment->xdr_position, segment->length);
-
-        if (segment->xdr_position == cursor->offset) {
-            fprintf(stderr, "matched rdma segment length %u size %u\n", segment->length, size);
-            v->iov    = segment->iov;
-            v->niov   = segment->niov;
-            v->length = segment->length;
+        if (chunk->xdr_position == cursor->offset) {
+            fprintf(stderr, "matched rdma segment length %u size %u\n", chunk->length, size);
+            v->iov    = chunk->iov;
+            v->niov   = chunk->niov;
+            v->length = chunk->length;
             return 0;
         }
     }

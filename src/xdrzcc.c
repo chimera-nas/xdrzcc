@@ -347,8 +347,7 @@ emit_wrapper_headers(
     fprintf(header, "    struct %s *out,\n", name);
     fprintf(header, "    const xdr_iovec *iov,\n");
     fprintf(header, "    int niov,\n");
-    fprintf(header, "    struct evpl_rpc2_rdma_segment *rdma_segments,\n");
-    fprintf(header, "    int num_rdma_segments,\n");
+    fprintf(header, "    struct evpl_rpc2_rdma_chunk *read_chunk,\n");
     fprintf(header, "    xdr_dbuf *dbuf);\n\n");
 
     fprintf(header, "int marshall_length_%s(const struct %s *in);\n\n", name, name);
@@ -788,7 +787,7 @@ emit_program(
             fprintf(source, "        xdr_dbuf_alloc_space(%s_arg, sizeof(*%s_arg), msg->dbuf);\n",
                     functionp->name, functionp->name);
             fprintf(source,
-                    "        len = unmarshall_%s(%s_arg, iov, niov, msg->read_segments, msg->num_read_segments, msg->dbuf);\n",
+                    "        len = unmarshall_%s(%s_arg, iov, niov, &msg->read_chunk, msg->dbuf);\n",
                     functionp->call_type->name, functionp->name);
             fprintf(source, "        if (unlikely(len != length)) abort();\n");
             fprintf(source, "        if (len < 0) return 2;\n");
@@ -979,11 +978,10 @@ emit_wrappers(
     fprintf(source, "    struct %s *out,\n", name);
     fprintf(source, "    const xdr_iovec *iov,\n");
     fprintf(source, "    int niov,\n");
-    fprintf(source, "    struct evpl_rpc2_rdma_segment *rdma_segments,\n");
-    fprintf(source, "    int num_rdma_segments,\n");
+    fprintf(source, "    struct evpl_rpc2_rdma_chunk *read_chunk,\n");
     fprintf(source, "    xdr_dbuf *dbuf) {\n");
     fprintf(source, "    struct xdr_read_cursor cursor;\n");
-    fprintf(source, "    xdr_read_cursor_init(&cursor, iov, niov, rdma_segments, num_rdma_segments);\n");
+    fprintf(source, "    xdr_read_cursor_init(&cursor, iov, niov, read_chunk);\n");
     fprintf(source, "    return __unmarshall_%s(out, &cursor, dbuf);\n", name
             );
     fprintf(source, "}\n\n");
