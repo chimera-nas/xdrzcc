@@ -1,6 +1,12 @@
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdarg.h>
 #include <string.h>
+
+#ifndef XDRZCC_XDR_BUILTIN_H
+/* Just for in-tree builds to suppress warnings*/
+#include "xdr_builtin.h"
+#endif /* ifndef XDRZCC_XDR_BUILTIN_H */
 
 #ifndef TRUE
 #define TRUE         1
@@ -703,27 +709,27 @@ __unmarshall_opaque_zerocopy(
     uint32_t                       size;
     struct evpl_rpc2_rdma_segment *segment;
 
-#if EVPL_RPC2
-    fprintf(stderr, "unmarshalling opaque zerocopy at offset %d\n", cursor->offset);
+    rc = __unmarshall_uint32_t(&size, cursor, dbuf);
 
+    if (unlikely(rc < 0)) {
+        return rc;
+    }
+
+#if EVPL_RPC2
     for (i = 0; i < cursor->num_rdma_segments; i++) {
         segment = &cursor->rdma_segments[i];
 
         fprintf(stderr, "rdma segment %d: offset %d, length %d\n", i, segment->xdr_position, segment->length);
 
         if (segment->xdr_position == cursor->offset) {
-            fprintf(stderr, "matched rdma segment\n");
+            fprintf(stderr, "matched rdma segment length %u size %u\n", segment->length, size);
+            v->iov    = segment->iov;
+            v->niov   = segment->niov;
             v->length = segment->length;
             return 0;
         }
     }
 #endif /* if EVPL_RPC2 */
-
-    rc = __unmarshall_uint32_t(&size, cursor, dbuf);
-
-    if (unlikely(rc < 0)) {
-        return rc;
-    }
 
     rc = __unmarshall_opaque_fixed(v, size, cursor, dbuf);
 
