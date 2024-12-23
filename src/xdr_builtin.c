@@ -506,8 +506,7 @@ __unmarshall_xdr_string(
         }
 
     } else {
-        str->str    = dbuf->buffer + dbuf->used;
-        dbuf->used += str->len;
+        xdr_dbuf_alloc_space(str->str, str->len, dbuf);
 
         rc = xdr_read_cursor_extract(cursor, str->str, str->len);
 
@@ -546,7 +545,8 @@ __unmarshall_opaque_fixed(
 {
     int pad, chunk, left = size;
 
-    v->iov    = dbuf->buffer + dbuf->used;
+    xdr_dbuf_alloc_space(v->iov, sizeof(*v->iov) * (cursor->last - cursor->cur), dbuf);
+
     v->length = size;
     v->niov   = 0;
 
@@ -576,8 +576,6 @@ __unmarshall_opaque_fixed(
         v->niov++;
 
     } while (left);
-
-    dbuf->used += sizeof(xdr_iovec) * v->niov;
 
     pad = (4 - (size & 0x3)) & 0x3;
 
@@ -685,8 +683,7 @@ __unmarshall_opaque(
         }
 
     } else {
-        v->data     = dbuf->buffer + dbuf->used;
-        dbuf->used += v->len;
+        xdr_dbuf_alloc_space(v->data, v->len, dbuf);
 
         rc = xdr_read_cursor_extract(cursor, v->data, v->len);
 
