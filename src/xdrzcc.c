@@ -824,8 +824,9 @@ emit_program(
                     functionp->name, functionp->reply_type->name);
             fprintf(source, "{\n");
             fprintf(source, "    struct evpl_rpc2_msg *msg = private_data;\n");
-            fprintf(source, "    struct evpl_iovec iov, msg_iov[256];\n");
+            fprintf(source, "    struct evpl_iovec iov, *msg_iov;\n");
             fprintf(source, "    int niov, msg_niov = 256,len;\n");
+            fprintf(source, "    xdr_dbuf_alloc_space(msg_iov, sizeof(*msg_iov) * 256, msg->dbuf);\n");
             fprintf(source,
                     "    niov = evpl_iovec_reserve(evpl, 128*1024, 8, 1, &iov);\n");
             fprintf(source, "    if (unlikely(niov != 1)) return;\n");
