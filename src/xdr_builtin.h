@@ -36,10 +36,10 @@ xdr_dbuf_alloc(void)
 
     dbuf = malloc(sizeof(*dbuf));
 
-    dbuf->buffer = malloc(256 * 1024);
+    dbuf->buffer = malloc(1024 * 1024);
 
     dbuf->used = 0;
-    dbuf->size = 256 * 1024;
+    dbuf->size = 1024 * 1024;
 
     return dbuf;
 } /* xdr_dbuf_alloc */
@@ -57,11 +57,12 @@ xdr_dbuf_reset(xdr_dbuf *dbuf)
     dbuf->used = 0;
 } /* xdr_dbuf_reset */
 
-#define xdr_dbuf_alloc_space(ptr, size, dbuf)      \
+#define xdr_dbuf_alloc_space(ptr, isize, dbuf)      \
         {                                                     \
-            ptr         = dbuf->buffer + dbuf->used;    \
-            dbuf->used += size; \
-            dbuf->used  = (dbuf->used + 7) & ~7; \
+            if ((dbuf)->used + (isize) > (dbuf)->size) abort(); \
+            (ptr)         = (dbuf)->buffer + (dbuf)->used;    \
+            (dbuf)->used += (isize); \
+            (dbuf)->used  = ((dbuf)->used + 7) & ~7; \
         }
 
 #define xdr_dbuf_alloc_opaque(opaque, ilen, dbuf) \
