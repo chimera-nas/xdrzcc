@@ -619,13 +619,9 @@ __marshall_opaque_zerocopy(
 
 #if EVPL_RPC2
     if (cursor->write_chunk && cursor->write_chunk->length) {
-        cursor->write_chunk->iov          = v->iov;
-        cursor->write_chunk->niov         = v->niov;
-        cursor->write_chunk->length       = v->length;
-        cursor->write_chunk->xdr_position = cursor->scratch_used + cursor->total;
-        fprintf(stderr, "write chunk: offset %d, length %d\n", cursor->write_chunk->xdr_position, cursor->write_chunk->
-                length);
-
+        cursor->write_chunk->iov    = v->iov;
+        cursor->write_chunk->niov   = v->niov;
+        cursor->write_chunk->length = v->length;
         return;
     }
  #endif /* if EVPL_RPC2 */
@@ -731,10 +727,7 @@ __unmarshall_opaque_zerocopy(
 #if EVPL_RPC2
     if (cursor->read_chunk && cursor->read_chunk->length) {
         chunk = cursor->read_chunk;
-        fprintf(stderr, "rdma chunk: offset %d, length %d\n", chunk->xdr_position, chunk->length);
-
         if (chunk->xdr_position == cursor->offset) {
-            fprintf(stderr, "matched rdma segment length %u size %u\n", chunk->length, size);
             v->iov    = chunk->iov;
             v->niov   = chunk->niov;
             v->length = chunk->length;
