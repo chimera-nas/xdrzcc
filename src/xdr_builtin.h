@@ -36,10 +36,10 @@ xdr_dbuf_alloc(void)
 
     dbuf = malloc(sizeof(*dbuf));
 
-    dbuf->buffer = malloc(1024 * 1024);
+    dbuf->buffer = malloc(16 * 1024);
 
     dbuf->used = 0;
-    dbuf->size = 1024 * 1024;
+    dbuf->size = 16 * 1024;
 
     return dbuf;
 } /* xdr_dbuf_alloc */
