@@ -616,7 +616,7 @@ __marshall_opaque_zerocopy(
     __marshall_uint32_t(&v->length, cursor);
 
 #if EVPL_RPC2
-    if (cursor->write_chunk && cursor->write_chunk->length) {
+    if (cursor->write_chunk && cursor->write_chunk->max_length) {
         cursor->write_chunk->iov    = v->iov;
         cursor->write_chunk->niov   = v->niov;
         cursor->write_chunk->length = v->length;
