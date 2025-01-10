@@ -28,7 +28,7 @@ main(
         data[i] = i;
     }
 
-    dbuf = xdr_dbuf_alloc();
+    dbuf = xdr_dbuf_alloc(16 * 1024);
 
     xdr_set_ref(&msg1, data, &iov_data, 1, 7);
 

@@ -22,7 +22,7 @@ main(
     xdr_iovec_set_data(&iov_in, buffer);
     xdr_iovec_set_len(&iov_in, sizeof(buffer));
 
-    dbuf = xdr_dbuf_alloc();
+    dbuf = xdr_dbuf_alloc(16 * 1024);
 
     xdr_dbuf_reserve(&msg1, value, 16, dbuf);
 

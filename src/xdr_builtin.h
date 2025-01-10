@@ -30,16 +30,16 @@ typedef struct {
 } xdr_dbuf;
 
 static inline xdr_dbuf *
-xdr_dbuf_alloc(void)
+xdr_dbuf_alloc(int bytes)
 {
     xdr_dbuf *dbuf;
 
     dbuf = malloc(sizeof(*dbuf));
 
-    dbuf->buffer = malloc(16 * 1024);
+    dbuf->buffer = malloc(bytes);
 
     dbuf->used = 0;
-    dbuf->size = 16 * 1024;
+    dbuf->size = bytes;
 
     return dbuf;
 } /* xdr_dbuf_alloc */

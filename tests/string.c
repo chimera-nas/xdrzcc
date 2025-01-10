@@ -22,7 +22,7 @@ main(
     xdr_iovec_set_data(&iov_in, buffer);
     xdr_iovec_set_len(&iov_in, sizeof(buffer));
 
-    dbuf = xdr_dbuf_alloc();
+    dbuf = xdr_dbuf_alloc(16 * 1024);
 
     xdr_dbuf_strncpy(&msg1, string1, "1234567", 7, dbuf);
     xdr_dbuf_strncpy(&msg1, string2, "1234", 4, dbuf);

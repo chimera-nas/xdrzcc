@@ -6,7 +6,7 @@
 
 #include <assert.h>
 
-#include "uint32_vector_one_xdr.h"
+#include "double_xdr.h"
 
 int
 main(
@@ -22,11 +22,9 @@ main(
     xdr_iovec_set_data(&iov_in, buffer);
     xdr_iovec_set_len(&iov_in, sizeof(buffer));
 
-    dbuf = xdr_dbuf_alloc();
+    dbuf = xdr_dbuf_alloc(16 * 1024);
 
-    xdr_dbuf_reserve(&msg1, value, 1, dbuf);
-
-    msg1.value[0] = 42;
+    msg1.value = 42.7;
 
     rc = marshall_MyMsg(&msg1, &iov_in, &iov_out, &one, NULL, 0);
 
@@ -36,8 +34,7 @@ main(
 
     assert(rc == 8);
 
-    assert(msg2.num_value == 1);
-    assert(msg2.value[0] == 42);
+    assert(msg1.value == msg2.value);
 
     xdr_dbuf_free(dbuf);
 

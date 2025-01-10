@@ -6,7 +6,7 @@
 
 #include <assert.h>
 
-#include "union_xdr.h"
+#include "nested_xdr.h"
 
 int
 main(
@@ -22,54 +22,23 @@ main(
     xdr_iovec_set_data(&iov_in, buffer);
     xdr_iovec_set_len(&iov_in, sizeof(buffer));
 
-    dbuf = xdr_dbuf_alloc();
+    dbuf = xdr_dbuf_alloc(16 * 1024);
 
-    msg1.opt           = OPTION1;
-    msg1.option1.value = 42;
-
-    rc = marshall_MyMsg(&msg1, &iov_in, &iov_out, &one, NULL, 0);
-
-    assert(rc == 8);
-
-    rc = unmarshall_MyMsg(&msg2, &iov_out, one, NULL, dbuf);
-
-    assert(rc == 8);
-
-    assert(msg1.opt == msg2.opt);
-    assert(msg1.option1.value == msg2.option1.value);
-
-    xdr_dbuf_reset(dbuf);
-    xdr_iovec_set_len(&iov_in, sizeof(buffer));
-
-    msg1.opt = OPTION2;
-    xdr_dbuf_strncpy(&msg1.option2, value, "1234567", 7, dbuf);
+    msg1.value        = 42;
+    msg1.inner1.value = 43;
+    msg1.inner2.value = 44;
 
     rc = marshall_MyMsg(&msg1, &iov_in, &iov_out, &one, NULL, 0);
 
-    assert(rc == 16);
+    assert(rc == 12);
 
     rc = unmarshall_MyMsg(&msg2, &iov_out, one, NULL, dbuf);
 
-    assert(rc == 16);
+    assert(rc == 12);
 
-    assert(msg1.opt == msg2.opt);
-    assert(strcmp(msg1.option2.value.str, msg2.option2.value.str) == 0);
-
-    xdr_dbuf_reset(dbuf);
-    xdr_iovec_set_len(&iov_in, sizeof(buffer));
-
-
-    msg1.opt = OPTION3;
-
-    rc = marshall_MyMsg(&msg1, &iov_in, &iov_out, &one, NULL, 0);
-
-    assert(rc == 4);
-
-    rc = unmarshall_MyMsg(&msg2, &iov_out, one, NULL, dbuf);
-
-    assert(rc == 4);
-
-    assert(msg1.opt == msg2.opt);
+    assert(msg1.value == msg2.value);
+    assert(msg1.inner1.value == msg2.inner1.value);
+    assert(msg1.inner2.value == msg2.inner2.value);
 
     xdr_dbuf_free(dbuf);
 
