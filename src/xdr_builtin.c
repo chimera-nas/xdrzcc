@@ -545,7 +545,7 @@ __unmarshall_opaque_fixed(
 {
     int pad, chunk, left = size;
 
-    xdr_dbuf_alloc_space(v->iov, sizeof(*v->iov) * (cursor->last - cursor->cur), dbuf);
+    xdr_dbuf_alloc_space(v->iov, sizeof(*v->iov) * ((cursor->last - cursor->cur) + 1), dbuf);
 
     v->length = size;
     v->niov   = 0;
