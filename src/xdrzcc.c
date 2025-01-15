@@ -1322,8 +1322,13 @@ main(
                     continue;
                 }
 
+                fprintf(header, "    struct {\n");
+
+
                 emit_member(header, xdr_union_casep->name,
                             xdr_union_casep->type);
+
+                fprintf(header, "    };\n");
             }
 
             HASH_FIND_STR(xdr_identifiers, xdr_unionp->pivot_type->name, chkm);
