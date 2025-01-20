@@ -6,7 +6,7 @@
 
 #include <assert.h>
 
-#include "double_xdr.h"
+#include "enum_xdr.h"
 
 int
 main(
@@ -24,15 +24,15 @@ main(
 
     dbuf = xdr_dbuf_alloc(16 * 1024);
 
-    msg1.value = 42.7;
+    msg1.value = 4;
 
     rc = marshall_MyMsg(&msg1, &iov_in, &iov_out, &one, NULL, 0);
 
-    assert(rc == 8);
+    assert(rc == 4);
 
     rc = unmarshall_MyMsg(&msg2, &iov_out, one, NULL, dbuf);
 
-    assert(rc == 8);
+    assert(rc == 4);
 
     assert(msg1.value == msg2.value);
 

@@ -6,7 +6,7 @@
 
 #include <assert.h>
 
-#include "nested_xdr.h"
+#include "union_xdr.h"
 
 int
 main(
@@ -24,21 +24,19 @@ main(
 
     dbuf = xdr_dbuf_alloc(16 * 1024);
 
-    msg1.value        = 42;
-    msg1.inner1.value = 43;
-    msg1.inner2.value = 44;
+    msg1.opt = OPTION1;
+    msg1.option1.value = 43;
 
     rc = marshall_MyMsg(&msg1, &iov_in, &iov_out, &one, NULL, 0);
 
-    assert(rc == 12);
+    assert(rc == 8);
 
     rc = unmarshall_MyMsg(&msg2, &iov_out, one, NULL, dbuf);
 
-    assert(rc == 12);
+    assert(rc == 8);
 
-    assert(msg1.value == msg2.value);
-    assert(msg1.inner1.value == msg2.inner1.value);
-    assert(msg1.inner2.value == msg2.inner2.value);
+    assert(msg1.opt == msg2.opt);
+    assert(msg1.option1.value == msg2.option1.value);
 
     xdr_dbuf_free(dbuf);
 
