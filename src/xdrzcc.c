@@ -680,7 +680,7 @@ emit_program_header(
 {
     struct xdr_function *functionp;
 
-    fprintf(header, "#include \"rpc2/rpc2_program.h\"\n");
+    fprintf(header, "#include \"evpl/evpl_rpc2_program.h\"\n");
 
     fprintf(header, "struct %s {\n", version->name);
     fprintf(header, "    struct evpl_rpc2_program rpc2;\n");
@@ -736,8 +736,8 @@ emit_program(
     struct xdr_function *functionp;
     int                  maxproc = 0;
 
-    fprintf(source, "#include <core/evpl.h>\n");
-    fprintf(source, "#include \"rpc2/rpc2_program.h\"\n");
+    fprintf(source, "#include <evpl/evpl.h>\n");
+    fprintf(source, "#include \"evpl/evpl_rpc2_program.h\"\n");
 
     fprintf(source, "const static char *%s_%s_procs[] = {\n",
             program->name, version->name);
