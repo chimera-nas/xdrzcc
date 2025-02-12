@@ -381,7 +381,7 @@ emit_dump_member(
                 fprintf(source, "    for (int i = 0; i < in->num_%s; i++) {\n",
                         name);
                 fprintf(source,
-                        "        char subsubprefix[80];\n");
+                        "        char subsubprefix[160];\n");
                 fprintf(source,
                         "        snprintf(subsubprefix, sizeof(subsubprefix), \"%%s.%s[%%d]\", subprefix, i);\n",
                         name);
