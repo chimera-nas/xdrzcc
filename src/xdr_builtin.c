@@ -97,6 +97,7 @@ struct xdr_write_cursor {
     int                          scratch_size;
     int                          scratch_used;
     int                          total;
+    int                          ref_taken;
     struct evpl_rpc2_rdma_chunk *write_chunk;
 };
 
@@ -123,12 +124,12 @@ xdr_write_cursor_init(
     struct evpl_rpc2_rdma_chunk *write_chunk,
     int                          out_offset)
 {
-    cursor->iov         = out_iov;
-    cursor->niov        = 0;
-    cursor->maxiov      = out_niov;
-    cursor->scratch_iov = scratch_iov;
-    cursor->write_chunk = write_chunk;
-
+    cursor->iov          = out_iov;
+    cursor->niov         = 0;
+    cursor->maxiov       = out_niov;
+    cursor->scratch_iov  = scratch_iov;
+    cursor->write_chunk  = write_chunk;
+    cursor->ref_taken    = 0;
     cursor->scratch_used = out_offset;
     cursor->scratch_data = xdr_iovec_data(scratch_iov);
     cursor->scratch_size = xdr_iovec_len(scratch_iov);
@@ -154,7 +155,13 @@ xdr_write_cursor_flush(struct xdr_write_cursor *cursor)
 
         xdr_iovec_set_data(iov, cursor->scratch_data);
         xdr_iovec_set_len(iov, cursor->scratch_used);
-        xdr_iovec_copy_private(iov, cursor->scratch_iov);
+
+        if (!cursor->ref_taken) {
+            xdr_iovec_move_private(iov, cursor->scratch_iov);
+            cursor->ref_taken = 1;
+        } else {
+            xdr_iovec_copy_private(iov, cursor->scratch_iov);
+        }
 
         xdr_iovec_set_len(cursor->scratch_iov, xdr_iovec_len(cursor->scratch_iov) + cursor->scratch_used);
 
@@ -164,7 +171,7 @@ xdr_write_cursor_flush(struct xdr_write_cursor *cursor)
         cursor->scratch_used  = 0;
     }
 
-} /* xdr_write_cursor_finish */
+} /* xdr_write_cursor_flush */
 
 static inline int
 xdr_read_cursor_extract(
@@ -554,7 +561,7 @@ __unmarshall_opaque_fixed(
 
         xdr_iovec_set_data(&v->iov[v->niov], xdr_iovec_data(cursor->cur) +
                            cursor->iov_offset);
-        xdr_iovec_copy_private(&v->iov[v->niov], cursor->cur);
+        xdr_iovec_move_private(&v->iov[v->niov], cursor->cur);
 
         chunk = xdr_iovec_len(cursor->cur) - cursor->iov_offset;
 
@@ -635,7 +642,7 @@ __marshall_opaque_zerocopy(
         iov = &cursor->iov[cursor->niov++];
 
         xdr_iovec_set_data(iov, xdr_iovec_data(&v->iov[i]));
-        xdr_iovec_copy_private(iov, &v->iov[i]);
+        xdr_iovec_move_private(iov, &v->iov[i]);
         xdr_iovec_set_len(iov, xdr_iovec_len(&v->iov[i]));
 
         if (xdr_iovec_len(iov) > left) {

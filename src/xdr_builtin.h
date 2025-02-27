@@ -133,6 +133,7 @@ typedef struct {
 #define xdr_iovec_set_data(iov, ptr) ((iov)->iov_base = (ptr))
 #define xdr_iovec_set_len(iov, len)  ((iov)->iov_len = (len))
 
+#define xdr_iovec_move_private(out, in)
 #define xdr_iovec_copy_private(out, in)
 #define xdr_iovec_set_private_null(out)
 
