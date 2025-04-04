@@ -21,7 +21,7 @@ macro(unit_test_xdrzcc name xdr_file c_file)
     add_executable(${name} ${c_file} ${XDR_C})
 
     set_source_files_properties(
-        ${XDR_C} PROPERTIES COMPILE_OPTIONS -Wno-unused
+        ${XDR_C} PROPERTIES COMPILE_OPTIONS "-Wno-unused;-Wno-format-truncation"
     )
 
     add_dependencies(${name} xdrzcc)
