@@ -36,3 +36,6 @@ if (NOT "${CMAKE_SOURCE_DIR}" STREQUAL "${PROJECT_SOURCE_DIR}")
     set(XDRZCC ${XDRZCC} PARENT_SCOPE)
 endif()
 
+# Install man page
+install(FILES man/xdrzcc.1 DESTINATION share/man/man1)
+

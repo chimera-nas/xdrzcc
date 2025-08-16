@@ -1,0 +1,30 @@
+{
+        "name": "xdrzcc",
+        "build": {
+                "dockerfile": "Dockerfile"
+        },
+        "customizations": {
+                "vscode": {
+                        "settings": {},
+                        "extensions": [
+                                "anysphere.cpptools",
+                                "ms-vscode.cmake-tools",
+                                "fredericbonnet.cmake-test-adapter",
+                                "ms-azuretools.vscode-docker",
+                                "benjarvis.uncrustify",
+                                "anthropic.claude-code"
+                        ]
+                }
+        },
+        "mounts": [
+                "source=xdrzcc-build,target=/build,type=volume"
+        ],
+        "appPort": [],
+        "forwardPorts": [],
+        "privileged": true,
+        "remoteEnv": {
+                "XDRZCC_BUILD_DIR": "/build"
+        },
+        "workspaceMount": "source=${localWorkspaceFolder},target=/xdrzcc,type=bind",
+        "workspaceFolder": "/xdrzcc"
+}

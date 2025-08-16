@@ -54,3 +54,5 @@ add_executable(xdrzcc
 add_dependencies(xdrzcc generate_embedded_files)
 
 set(XDRZCC ${CMAKE_CURRENT_BINARY_DIR}/xdrzcc PARENT_SCOPE)
+
+install(TARGETS xdrzcc RUNTIME DESTINATION bin)

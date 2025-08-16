@@ -1,0 +1,130 @@
+.TH XDRZCC 1 "January 2025" "xdrzcc" "User Commands"
+.SH NAME
+xdrzcc \- XDR to C compiler for zero-copy data serialization
+.SH SYNOPSIS
+.B xdrzcc
+[\fI\,OPTION\/\fR]...
+.I input.x output.c output.h
+.SH DESCRIPTION
+.B xdrzcc
+is a specialized C compiler that transforms XDR (External Data Representation) 
+definitions into high-performance C code. It's designed for zero-copy data 
+serialization, primarily used for parsing Network File System (NFS) traffic.
+.PP
+The compiler takes an XDR specification file as input and generates C source 
+and header files containing marshalling, unmarshalling, length calculation, 
+and string representation functions for the defined types.
+.SH OPTIONS
+.TP
+.B \-h
+Display help message and exit
+.TP
+.B \-r
+Enable RPC2 mode for compatibility with RPC2 library
+.SH ARGUMENTS
+.TP
+.I input.x
+XDR specification file containing type definitions
+.TP
+.I output.c
+Generated C source file with implementation
+.TP
+.I output.h
+Generated C header file with type declarations and function prototypes
+.SH GENERATED FUNCTIONS
+For each XDR type defined in the input file, xdrzcc generates the following functions:
+.TP
+.B marshall_*
+Serialize data to wire format
+.TP
+.B unmarshall_*
+Deserialize data from wire format
+.TP
+.B len_*
+Calculate serialized size in bytes
+.TP
+.B str_*
+Generate debug string representation
+.SH FEATURES
+.PP
+.IP \[bu] 2
+Zero-copy design using I/O vectors to avoid memory copies
+.IP \[bu]
+Efficient arena allocators for memory management
+.IP \[bu]
+Support for all XDR types: int, bool, string, arrays, unions, structs, enums
+.IP \[bu]
+Automatic dependency resolution with topological sorting
+.IP \[bu]
+ANSI C compatible generated code
+.IP \[bu]
+No external runtime dependencies (only libc)
+.IP \[bu]
+All runtime support embedded in generated files
+.SH EXAMPLES
+Generate C code from an XDR specification:
+.PP
+.nf
+.RS
+xdrzcc nfs.x nfs.c nfs.h
+.RE
+.fi
+.PP
+Generate code with RPC2 compatibility:
+.PP
+.nf
+.RS
+xdrzcc -r rpc_spec.x rpc.c rpc.h
+.RE
+.fi
+.PP
+Using the generated code in your application:
+.PP
+.nf
+.RS
+#include "nfs.h"
+
+// Serialize a structure
+struct my_data data = { ... };
+size_t len = len_my_data(&data);
+unsigned char *buffer = malloc(len);
+struct iovec iov = { buffer, len };
+marshall_my_data(&data, &iov, 1);
+
+// Deserialize a structure
+struct my_data result;
+unmarshall_my_data(&result, buffer, len);
+.RE
+.fi
+.SH EXIT STATUS
+.TP
+.B 0
+Successful compilation
+.TP
+.B 1
+Error in command line arguments or compilation failure
+.SH FILES
+.TP
+.I *.x
+XDR specification files
+.TP
+.I *.c
+Generated C source files
+.TP
+.I *.h
+Generated C header files
+.SH NOTES
+The generated code is designed to be self-contained with no external 
+dependencies beyond the standard C library. All necessary runtime support 
+is embedded directly in the generated files.
+.SH SEE ALSO
+.BR rpcgen (1)
+.SH AUTHOR
+Ben Jarvis
+.SH COPYRIGHT
+Copyright \(co 2024 Ben Jarvis
+.br
+License: LGPL
+.br
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
