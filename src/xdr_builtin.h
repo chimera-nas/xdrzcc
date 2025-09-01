@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 Ben Jarvis
+// SPDX-License-Identifier: Unlicense
+// The SPDX identifiers are stripped when this file is embedded into generated code
+
 #ifndef XDRZCC_XDR_BUILTIN_H
 #define XDRZCC_XDR_BUILTIN_H
 
