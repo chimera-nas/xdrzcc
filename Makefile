@@ -1,6 +1,6 @@
-# SPDX-FileCopyrightText: 2024 Ben Jarvis
+# SPDX-FileCopyrightText: 2024 - 2025 Ben Jarvis
 #
-# SPDX-License-Identifier: LGPL
+# SPDX-License-Identifier: LGPL-2.1-only
 
 CMAKE_ARGS := -G Ninja
 CMAKE_ARGS_RELEASE := -DCMAKE_BUILD_TYPE=Release
@@ -37,4 +37,16 @@ release: build_release test_release
 
 clean:
 	@rm -rf build
+
+
+.PHONY: syntax-check
+syntax-check:
+	@find src/ -type f \( -name "*.c" -o -name "*.h" \) -print0 | \
+                xargs -0 -I {} sh -c 'uncrustify -c etc/uncrustify.cfg --check {} >/dev/null 2>&1 || (echo "Formatting issue in: {}" && exit 1)' || exit 1
+
+
+.PHONY: syntax
+syntax:
+	@find src/ -type f \( -name "*.c" -o -name "*.h" \) -print0 | \
+                xargs -0 -I {} sh -c 'uncrustify -c etc/uncrustify.cfg --replace --no-backup {}' >/dev/null 2>&1
 		

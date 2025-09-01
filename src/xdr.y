@@ -3,7 +3,7 @@
 /*
  * SPDX-FileCopyrightText: 2024 Ben Jarvis
  *
- * SPDX-License-Identifier: LGPL
+ * SPDX-License-Identifier: LGPL-2.1-only
  */
 
 

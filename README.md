@@ -1,6 +1,10 @@
+<!--
+SPDX-FileCopyrightText: 2025 Ben Jarvis
+
+SPDX-License-Identifier: LGPL-2.1-only
+-->
+
 # xdrzcc (eXternal Data Representation Zero Copy Compiler)
-
-
 
 xdrzcc compiles external data representation (XDR) definitions into ANSI C code, similar to the venerable __rpcgen__.   The generated code provides functions to marshall and unmarshall XDR data types to and from plain old C data structures. xdrzcc aims to do this more efficiently than other available tools.
 
