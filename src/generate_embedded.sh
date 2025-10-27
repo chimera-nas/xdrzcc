@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: LGPL-2.1-only
 
-echo "const char* $3 = \n" > $2
+printf "const char* $3 = " > $2
 
 sed -e '/SPDX[-:]/d' -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$/\\n"/' $1 >> $2
-echo ";\n" >> $2
+printf ";" >> $2
