@@ -687,14 +687,35 @@ emit_program_header(
     {
 
         if (strcmp(functionp->call_type->name, "void")) {
-            fprintf(header,
-                    "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, struct %s *, struct evpl_rpc2_msg *, void *);\n",
-                    functionp->name,
-                    functionp->call_type->name);
+            if (strcmp(functionp->reply_type->name, "void")) {
+                fprintf(header,
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, struct %s *, void (*callback)(struct evpl *evpl, struct %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                        functionp->name,
+                        functionp->call_type->name,
+                        functionp->reply_type->name
+                        );
+            } else {
+                fprintf(header,
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, struct %s *, void (*callback)(struct evpl *evpl, int status, void *callback_private_data), void *callback_private_data);\n",
+                        functionp->name,
+                        functionp->call_type->name
+                        );
+            }
+
         } else {
-            fprintf(header,
-                    "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, struct evpl_rpc2_msg *, void *);\n",
-                    functionp->name);
+            if (strcmp(functionp->reply_type->name, "void")) {
+                fprintf(header,
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, void (*callback)(struct evpl *evpl, struct %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                        functionp->name,
+                        functionp->reply_type->name
+                        );
+            } else {
+                fprintf(header,
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, void (*callback)(struct evpl *evpl, int status, void *callback_private_data), void *callback_private_data);\n",
+                        functionp->name
+                        );
+
+            }
         }
 
         if (strcmp(functionp->reply_type->name, "void")) {
@@ -709,15 +730,30 @@ emit_program_header(
                     functionp->name);
         }
 
-        if (strcmp(functionp->reply_type->name, "void")) {
-            fprintf(header, "   void (*reply_%s)(struct %s *);\n",
+        if (strcmp(functionp->call_type->name, "void")) {
+            fprintf(header,
+                    "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, struct %s *, struct evpl_rpc2_msg *, void *);\n",
                     functionp->name,
-                    functionp->reply_type->name);
+                    functionp->call_type->name);
         } else {
-            fprintf(header, "   void (*reply_%s)(void);\n",
+            fprintf(header,
+                    "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, struct evpl_rpc2_msg *, void *);\n",
+                    functionp->name);
+        }
+
+        if (strcmp(functionp->reply_type->name, "void")) {
+            fprintf(header,
+                    "    void (*recv_reply_%s)(struct evpl *evpl, "
+                    "struct %s *reply, int status, void *callback_private_data);\n",
+                    functionp->name, functionp->reply_type->name);
+        } else {
+            fprintf(header,
+                    "    void (*recv_reply_%s)(struct evpl *evpl, "
+                    "int status, void *callback_private_data);\n",
                     functionp->name);
         }
     }
+
     fprintf(header, "};\n\n");
 
     fprintf(header, "void %s_init(struct %s *);\n",
@@ -813,12 +849,78 @@ emit_program(
     fprintf(source, "    return 0;\n");
     fprintf(source, "}\n\n");
 
+
+    fprintf(source, "static int\n");
+    fprintf(source, "reply_dispatch_%s(\n", version->name);
+    fprintf(source, "    struct evpl *evpl,\n");
+    fprintf(source, "    struct evpl_rpc2_conn *conn,\n");
+    fprintf(source, "    struct evpl_rpc2_msg *msg,\n");
+    fprintf(source, "    xdr_iovec *iov,\n");
+    fprintf(source, "    int niov,\n");
+    fprintf(source, "    int length,\n");
+    fprintf(source, "    void *callback_fn,\n");
+    fprintf(source, "    void *callback_private_data)\n");
+    fprintf(source, "{\n");
+    fprintf(source, "    struct %s *prog = msg->program->program_data;\n",
+            version->name);
+    fprintf(source, "    int len;\n");
+    fprintf(source, "    switch (msg->proc) {\n");
+
+    for (functionp = version->functions; functionp != NULL; functionp =
+             functionp->next) {
+
+        if (functionp->id > maxproc) {
+            maxproc = functionp->id;
+        }
+
+        fprintf(source, "    case %d:\n", functionp->id);
+
+        /* Call has an argument */
+        if (strcmp(functionp->reply_type->name, "void")) {
+            /* We will unmarshall argument into provided buffer */
+            fprintf(source, "        struct %s *%s_arg;\n",
+                    functionp->reply_type->name,
+                    functionp->name);
+            fprintf(source, "        xdr_dbuf_alloc_space(%s_arg, sizeof(*%s_arg), msg->dbuf);\n",
+                    functionp->name, functionp->name);
+            fprintf(source,
+                    "        len = unmarshall_%s(%s_arg, iov, niov, &msg->read_chunk, msg->dbuf);\n",
+                    functionp->reply_type->name, functionp->name);
+            fprintf(source, "        if (unlikely(len != length)) abort();\n");
+            fprintf(source, "        if (len < 0) abort();\n");
+
+            /* Then make the call */
+            fprintf(source,
+                    " void (*callback_%s)(struct evpl *evpl, struct %s *reply, int status, void *callback_private_data) = callback_fn;\n",
+                    functionp->name, functionp->reply_type->name);
+            fprintf(source,
+                    "        callback_%s(evpl, %s_arg, 0, callback_private_data);\n",
+                    functionp->name, functionp->name);
+        } else {
+            fprintf(source,
+                    " void (*callback_%s)(struct evpl *evpl, int status, void *callback_private_data) = callback_fn;\n",
+                    functionp->name);
+            /* No argument, just make the call */
+            fprintf(source,
+                    "        callback_%s(evpl, 0, callback_private_data);\n",
+                    functionp->name);
+
+        }
+        fprintf(source, "        break;\n\n");
+    }
+
+    fprintf(source, "    default:\n");
+    fprintf(source, "        abort();\n");
+    fprintf(source, "    }\n");
+    fprintf(source, "    return 0;\n");
+    fprintf(source, "}\n\n");
+
     for (functionp = version->functions; functionp != NULL; functionp =
              functionp->next) {
 
         if (strcmp(functionp->reply_type->name, "void")) {
             fprintf(source,
-                    "void send_reply_%s(struct evpl *evpl, struct %s *arg, void *private_data)\n",
+                    "static void send_reply_%s(struct evpl *evpl, struct %s *arg, void *private_data)\n",
                     functionp->name, functionp->reply_type->name);
             fprintf(source, "{\n");
             fprintf(source, "    struct evpl_rpc2_msg *msg = private_data;\n");
@@ -836,7 +938,7 @@ emit_program(
             fprintf(source,
                     "    evpl_iovec_commit(evpl, 0, &iov, 1);\n");
             fprintf(source,
-                    "    msg->program->reply_dispatch(evpl, msg, msg_iov, msg_niov, len);\n");
+                    "    msg->program->send_reply_dispatch(evpl, msg, msg_iov, msg_niov, len);\n");
         } else {
             fprintf(source,
                     "void send_reply_%s(struct evpl *evpl, void *private_data)\n",
@@ -847,12 +949,70 @@ emit_program(
             fprintf(source, "    int niov, len;\n");
             fprintf(source, "    niov = evpl_iovec_alloc(evpl, msg->program->reserve, 8, 1, &iov);\n");
             fprintf(source,
-                    "    msg->program->reply_dispatch(evpl, msg, &iov, niov, msg->program->reserve);\n")
+                    "    msg->program->send_reply_dispatch(evpl, msg, &iov, niov, msg->program->reserve);\n")
             ;
         }
 
         fprintf(source, "}\n\n");
-    }
+
+        const char *arg_type       = functionp->call_type->name;
+        int         has_args       = strcmp(arg_type, "void") != 0;
+        int         has_reply_args = strcmp(functionp->reply_type->name, "void") != 0;
+
+        fprintf(source, "static void\n");
+        fprintf(source, "send_call_%s(\n", functionp->name);
+        fprintf(source, "    struct evpl_rpc2_program *program,\n");
+        fprintf(source, "    struct evpl *evpl,\n");
+        fprintf(source, "    struct evpl_rpc2_conn *conn,\n");
+
+        if (has_args) {
+            fprintf(source, "    struct %s *args,\n", arg_type);
+        }
+
+        if (has_reply_args) {
+            fprintf(source,
+                    "    void (*callback)(struct evpl *evpl, struct %s *reply, int status, void *callback_private_data),\n",
+                    functionp->reply_type->name);
+        } else {
+            fprintf(source, "    void (*callback)(struct evpl *evpl, int status, void *callback_private_data),\n");
+        }
+
+
+
+        fprintf(source, "    void *callback_private_data)\n");
+        fprintf(source, "{\n");
+        fprintf(source, "    struct evpl_iovec iov, *msg_iov;\n");
+        fprintf(source, "    int msg_niov = 256, len;\n");
+        fprintf(source, "    int reserve = 256;\n\n");
+        fprintf(source, "    xdr_dbuf *dbuf = (xdr_dbuf *) conn->thread_dbuf;\n");
+
+        if (has_args) {
+            fprintf(source, "    xdr_dbuf_reset(dbuf);\n");
+            fprintf(source, "    xdr_dbuf_alloc_space(msg_iov, sizeof(*msg_iov) * 256, dbuf);\n");
+            fprintf(source, "    evpl_iovec_reserve(evpl, 128*1024, 8, 1, &iov);\n\n");
+
+            fprintf(source, "    len = marshall_%s(args, &iov, msg_iov, &msg_niov, "
+                    "NULL, reserve);\n", arg_type);
+            fprintf(source, "    if (unlikely(len < 0)) {\n");
+            fprintf(source, "        xdr_dbuf_free(dbuf);\n");
+            fprintf(source, "        return;\n");
+            fprintf(source, "    }\n\n");
+
+            fprintf(source, "    xdr_iovec_set_len(&iov, len);\n");
+            fprintf(source, "    evpl_iovec_commit(evpl, 0, &iov, 1);\n");
+
+            fprintf(source, "    evpl_rpc2_call(evpl, program, conn, %d, "
+                    "&iov, 1, len, callback, callback_private_data);\n",
+                    functionp->id);
+        } else {
+            /* Void argument case */
+            fprintf(source, "    evpl_rpc2_call(evpl, program, conn, %d, "
+                    "NULL, 0, 0, callback, callback_private_data);\n",
+                    functionp->id);
+        }
+
+        fprintf(source, "}\n\n");
+    } /* emit_program */
 
     fprintf(source, "void %s_init(struct %s *prog)\n", version->name, version->
             name);
@@ -865,11 +1025,15 @@ emit_program(
     fprintf(source, "    prog->rpc2.procs = %s_%s_procs;\n", program->name,
             version->name);
     fprintf(source, "    prog->rpc2.program_data = prog;\n");
-    fprintf(source, "    prog->rpc2.call_dispatch = call_dispatch_%s;\n",
+    fprintf(source, "    prog->rpc2.recv_call_dispatch = call_dispatch_%s;\n",
+            version->name);
+    fprintf(source, "    prog->rpc2.recv_reply_dispatch = reply_dispatch_%s;\n",
             version->name);
 
     for (functionp = version->functions; functionp != NULL; functionp =
              functionp->next) {
+        fprintf(source, "    prog->send_call_%s = send_call_%s;\n",
+                functionp->name, functionp->name);
         fprintf(source, "    prog->send_reply_%s = send_reply_%s;\n",
                 functionp->name, functionp->name);
     }
