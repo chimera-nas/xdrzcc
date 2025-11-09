@@ -983,7 +983,6 @@ emit_program(
         fprintf(source, "{\n");
         fprintf(source, "    struct evpl_iovec iov, *msg_iov;\n");
         fprintf(source, "    int msg_niov = 256, len;\n");
-        fprintf(source, "    int reserve = 256;\n\n");
         fprintf(source, "    xdr_dbuf *dbuf = (xdr_dbuf *) conn->thread_dbuf;\n");
 
         if (has_args) {
@@ -992,7 +991,7 @@ emit_program(
             fprintf(source, "    evpl_iovec_reserve(evpl, 128*1024, 8, 1, &iov);\n\n");
 
             fprintf(source, "    len = marshall_%s(args, &iov, msg_iov, &msg_niov, "
-                    "NULL, reserve);\n", arg_type);
+                    "NULL, program->reserve);\n", arg_type);
             fprintf(source, "    if (unlikely(len < 0)) {\n");
             fprintf(source, "        xdr_dbuf_free(dbuf);\n");
             fprintf(source, "        return;\n");
@@ -1005,9 +1004,13 @@ emit_program(
                     "&iov, 1, len, callback, callback_private_data);\n",
                     functionp->id);
         } else {
+
             /* Void argument case */
+            fprintf(source, "    int niov;\n");
+            fprintf(source, "    niov = evpl_iovec_alloc(evpl, program->reserve, 8, 1, &iov);\n");
+
             fprintf(source, "    evpl_rpc2_call(evpl, program, conn, %d, "
-                    "NULL, 0, 0, callback, callback_private_data);\n",
+                    "&iov, 1, program->reserve, callback, callback_private_data);\n",
                     functionp->id);
         }
 
