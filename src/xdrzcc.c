@@ -1001,7 +1001,7 @@ emit_program(
             fprintf(source, "    evpl_iovec_commit(evpl, 0, &iov, 1);\n");
 
             fprintf(source, "    evpl_rpc2_call(evpl, program, conn, %d, "
-                    "&iov, 1, len, callback, callback_private_data);\n",
+                    "msg_iov, msg_niov, len, callback, callback_private_data);\n",
                     functionp->id);
         } else {
 
