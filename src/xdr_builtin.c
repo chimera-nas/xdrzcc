@@ -100,9 +100,10 @@ struct xdr_write_cursor {
     void                        *scratch_data;
     int                          scratch_size;
     int                          scratch_used;
+    int                          scratch_reserved;
     int                          total;
     int                          ref_taken;
-    struct evpl_rpc2_rdma_chunk *write_chunk;
+    struct evpl_rpc2_rdma_chunk *rdma_chunk;
 };
 
 static FORCE_INLINE void
@@ -125,18 +126,19 @@ xdr_write_cursor_init(
     xdr_iovec                   *scratch_iov,
     xdr_iovec                   *out_iov,
     int                          out_niov,
-    struct evpl_rpc2_rdma_chunk *write_chunk,
+    struct evpl_rpc2_rdma_chunk *rdma_chunk,
     int                          out_offset)
 {
-    cursor->iov          = out_iov;
-    cursor->niov         = 0;
-    cursor->maxiov       = out_niov;
-    cursor->scratch_iov  = scratch_iov;
-    cursor->write_chunk  = write_chunk;
-    cursor->ref_taken    = 0;
-    cursor->scratch_used = out_offset;
-    cursor->scratch_data = xdr_iovec_data(scratch_iov);
-    cursor->scratch_size = xdr_iovec_len(scratch_iov);
+    cursor->iov              = out_iov;
+    cursor->niov             = 0;
+    cursor->maxiov           = out_niov;
+    cursor->scratch_iov      = scratch_iov;
+    cursor->rdma_chunk       = rdma_chunk;
+    cursor->ref_taken        = 0;
+    cursor->scratch_used     = out_offset;
+    cursor->scratch_reserved = out_offset;
+    cursor->scratch_data     = xdr_iovec_data(scratch_iov);
+    cursor->scratch_size     = xdr_iovec_len(scratch_iov);
 
     xdr_iovec_set_len(scratch_iov, 0);
 
@@ -627,10 +629,11 @@ __marshall_opaque_zerocopy(
     __marshall_uint32_t(&v->length, cursor);
 
 #if EVPL_RPC2
-    if (cursor->write_chunk && cursor->write_chunk->max_length) {
-        cursor->write_chunk->iov    = v->iov;
-        cursor->write_chunk->niov   = v->niov;
-        cursor->write_chunk->length = v->length;
+    if (cursor->rdma_chunk && v->length <= cursor->rdma_chunk->max_length) {
+        cursor->rdma_chunk->iov          = v->iov;
+        cursor->rdma_chunk->niov         = v->niov;
+        cursor->rdma_chunk->length       = v->length;
+        cursor->rdma_chunk->xdr_position = cursor->scratch_used - cursor->scratch_reserved;
         return;
     }
  #endif /* if EVPL_RPC2 */

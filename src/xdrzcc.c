@@ -341,14 +341,14 @@ emit_wrapper_headers(
     fprintf(header, "    xdr_iovec *iov_in,\n");
     fprintf(header, "    xdr_iovec *iov_out,\n");
     fprintf(header, "    int *niov_out,\n");
-    fprintf(header, "    struct evpl_rpc2_rdma_chunk *write_chunk,\n");
+    fprintf(header, "    struct evpl_rpc2_rdma_chunk *rdma_chunk,\n");
     fprintf(header, "    int out_offset);\n\n");
 
     fprintf(header, "int unmarshall_%s(\n", name);
     fprintf(header, "    struct %s *out,\n", name);
     fprintf(header, "    const xdr_iovec *iov,\n");
     fprintf(header, "    int niov,\n");
-    fprintf(header, "    struct evpl_rpc2_rdma_chunk *read_chunk,\n");
+    fprintf(header, "    struct evpl_rpc2_rdma_chunk *rdma_chunk,\n");
     fprintf(header, "    xdr_dbuf *dbuf);\n\n");
 
     fprintf(header, "int marshall_length_%s(const struct %s *in);\n\n", name, name);
@@ -720,13 +720,13 @@ emit_program_header(
 
         if (strcmp(functionp->reply_type->name, "void")) {
             fprintf(header,
-                    "   void (*send_reply_%s)(struct evpl *evpl, struct %s *, void *);\n",
+                    "   int (*send_reply_%s)(struct evpl *evpl, struct %s *, void *);\n",
                     functionp->name,
                     functionp->reply_type->name);
 
         } else {
             fprintf(header,
-                    "   void (*send_reply_%s)(struct evpl *evpl, void *);\n",
+                    "   int (*send_reply_%s)(struct evpl *evpl, void *);\n",
                     functionp->name);
         }
 
@@ -826,7 +826,7 @@ emit_program(
             fprintf(source,
                     "        len = unmarshall_%s(%s_arg, iov, niov, &msg->read_chunk, msg->dbuf);\n",
                     functionp->call_type->name, functionp->name);
-            fprintf(source, "        if (unlikely(len != length)) abort();\n");
+            fprintf(source, "        if (unlikely(len != length)) return 2;\n");
             fprintf(source, "        if (len < 0) return 2;\n");
 
             /* Then make the call */
@@ -886,8 +886,8 @@ emit_program(
             fprintf(source,
                     "        len = unmarshall_%s(%s_arg, iov, niov, &msg->read_chunk, msg->dbuf);\n",
                     functionp->reply_type->name, functionp->name);
-            fprintf(source, "        if (unlikely(len != length)) abort();\n");
-            fprintf(source, "        if (len < 0) abort();\n");
+            fprintf(source, "        if (unlikely(len != length)) return 2;\n");
+            fprintf(source, "        if (len < 0) return 2;\n");
 
             /* Then make the call */
             fprintf(source,
@@ -910,7 +910,7 @@ emit_program(
     }
 
     fprintf(source, "    default:\n");
-    fprintf(source, "        abort();\n");
+    fprintf(source, "        return 2;\n");
     fprintf(source, "    }\n");
     fprintf(source, "    return 0;\n");
     fprintf(source, "}\n\n");
@@ -920,7 +920,7 @@ emit_program(
 
         if (strcmp(functionp->reply_type->name, "void")) {
             fprintf(source,
-                    "static void send_reply_%s(struct evpl *evpl, struct %s *arg, void *private_data)\n",
+                    "static int send_reply_%s(struct evpl *evpl, struct %s *arg, void *private_data)\n",
                     functionp->name, functionp->reply_type->name);
             fprintf(source, "{\n");
             fprintf(source, "    struct evpl_rpc2_msg *msg = private_data;\n");
@@ -929,11 +929,11 @@ emit_program(
             fprintf(source, "    xdr_dbuf_alloc_space(msg_iov, sizeof(*msg_iov) * 256, msg->dbuf);\n");
             fprintf(source,
                     "    niov = evpl_iovec_reserve(evpl, 128*1024, 8, 1, &iov);\n");
-            fprintf(source, "    if (unlikely(niov != 1)) return;\n");
+            fprintf(source, "    if (unlikely(niov != 1)) return 1;\n");
             fprintf(source,
                     "    len = marshall_%s(arg, &iov, msg_iov, &msg_niov, &msg->write_chunk, msg->program->reserve);\n",
                     functionp->reply_type->name);
-            fprintf(source, "    if (unlikely(len < 0)) abort();\n");
+            fprintf(source, "    if (unlikely(len < 0)) return 2;\n");
             fprintf(source, "    xdr_iovec_set_len(&iov, len + msg->program->reserve);\n");
             fprintf(source,
                     "    evpl_iovec_commit(evpl, 0, &iov, 1);\n");
@@ -941,7 +941,7 @@ emit_program(
                     "    msg->program->send_reply_dispatch(evpl, msg, msg_iov, msg_niov, len);\n");
         } else {
             fprintf(source,
-                    "void send_reply_%s(struct evpl *evpl, void *private_data)\n",
+                    "int send_reply_%s(struct evpl *evpl, void *private_data)\n",
                     functionp->name);
             fprintf(source, "{\n");
             fprintf(source, "    struct evpl_rpc2_msg *msg = private_data;\n");
@@ -952,7 +952,7 @@ emit_program(
                     "    msg->program->send_reply_dispatch(evpl, msg, &iov, niov, msg->program->reserve);\n")
             ;
         }
-
+        fprintf(source, "    return 0;\n");
         fprintf(source, "}\n\n");
 
         const char *arg_type       = functionp->call_type->name;
@@ -986,12 +986,16 @@ emit_program(
         fprintf(source, "    xdr_dbuf *dbuf = (xdr_dbuf *) conn->thread_dbuf;\n");
 
         if (has_args) {
+            fprintf(source, "struct evpl_rpc2_rdma_chunk rdma_chunk;\n");
+            fprintf(source, "    rdma_chunk.length = 0;\n");
+            fprintf(source, "    rdma_chunk.max_length = 64*1024*1024;\n");
+            fprintf(source, "    rdma_chunk.niov = 0;\n");
             fprintf(source, "    xdr_dbuf_reset(dbuf);\n");
             fprintf(source, "    xdr_dbuf_alloc_space(msg_iov, sizeof(*msg_iov) * 256, dbuf);\n");
             fprintf(source, "    evpl_iovec_reserve(evpl, 128*1024, 8, 1, &iov);\n\n");
 
             fprintf(source, "    len = marshall_%s(args, &iov, msg_iov, &msg_niov, "
-                    "NULL, program->reserve);\n", arg_type);
+                    "&rdma_chunk, program->reserve);\n", arg_type);
             fprintf(source, "    if (unlikely(len < 0)) {\n");
             fprintf(source, "        xdr_dbuf_free(dbuf);\n");
             fprintf(source, "        return;\n");
@@ -1001,7 +1005,7 @@ emit_program(
             fprintf(source, "    evpl_iovec_commit(evpl, 0, &iov, 1);\n");
 
             fprintf(source, "    evpl_rpc2_call(evpl, program, conn, %d, "
-                    "msg_iov, msg_niov, len, callback, callback_private_data);\n",
+                    "msg_iov, msg_niov, len, conn->rdma ? &rdma_chunk : NULL, callback, callback_private_data);\n",
                     functionp->id);
         } else {
 
@@ -1132,11 +1136,11 @@ emit_wrappers(
     fprintf(source, "    xdr_iovec *iov_in,\n");
     fprintf(source, "    xdr_iovec *iov_out,\n");
     fprintf(source, "    int *niov_out,\n");
-    fprintf(source, "    struct evpl_rpc2_rdma_chunk *write_chunk,\n");
+    fprintf(source, "    struct evpl_rpc2_rdma_chunk *rdma_chunk,\n");
     fprintf(source, "    int out_offset) {\n");
     fprintf(source, "    struct xdr_write_cursor cursor;\n");
     fprintf(source,
-            "    xdr_write_cursor_init(&cursor, iov_in, iov_out, *niov_out, write_chunk, out_offset);\n");
+            "    xdr_write_cursor_init(&cursor, iov_in, iov_out, *niov_out, rdma_chunk, out_offset);\n");
     fprintf(source, "    __marshall_%s(out, &cursor);\n", name);
     fprintf(source, "    xdr_write_cursor_flush(&cursor);\n");
     fprintf(source, "    *niov_out = cursor.niov;\n");
@@ -1148,10 +1152,10 @@ emit_wrappers(
     fprintf(source, "    struct %s *out,\n", name);
     fprintf(source, "    const xdr_iovec *iov,\n");
     fprintf(source, "    int niov,\n");
-    fprintf(source, "    struct evpl_rpc2_rdma_chunk *read_chunk,\n");
+    fprintf(source, "    struct evpl_rpc2_rdma_chunk *rdma_chunk,\n");
     fprintf(source, "    xdr_dbuf *dbuf) {\n");
     fprintf(source, "    struct xdr_read_cursor cursor;\n");
-    fprintf(source, "    xdr_read_cursor_init(&cursor, iov, niov, read_chunk);\n");
+    fprintf(source, "    xdr_read_cursor_init(&cursor, iov, niov, rdma_chunk);\n");
     fprintf(source, "    return __unmarshall_%s(out, &cursor, dbuf);\n", name
             );
     fprintf(source, "}\n\n");
