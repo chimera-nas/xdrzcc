@@ -689,14 +689,14 @@ emit_program_header(
         if (strcmp(functionp->call_type->name, "void")) {
             if (strcmp(functionp->reply_type->name, "void")) {
                 fprintf(header,
-                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, struct %s *, void (*callback)(struct evpl *evpl, struct %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, struct %s *, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, struct %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
                         functionp->name,
                         functionp->call_type->name,
                         functionp->reply_type->name
                         );
             } else {
                 fprintf(header,
-                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, struct %s *, void (*callback)(struct evpl *evpl, int status, void *callback_private_data), void *callback_private_data);\n",
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, struct %s *, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, int status, void *callback_private_data), void *callback_private_data);\n",
                         functionp->name,
                         functionp->call_type->name
                         );
@@ -705,13 +705,13 @@ emit_program_header(
         } else {
             if (strcmp(functionp->reply_type->name, "void")) {
                 fprintf(header,
-                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, void (*callback)(struct evpl *evpl, struct %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, struct %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
                         functionp->name,
                         functionp->reply_type->name
                         );
             } else {
                 fprintf(header,
-                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, void (*callback)(struct evpl *evpl, int status, void *callback_private_data), void *callback_private_data);\n",
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, int status, void *callback_private_data), void *callback_private_data);\n",
                         functionp->name
                         );
 
@@ -969,6 +969,10 @@ emit_program(
             fprintf(source, "    struct %s *args,\n", arg_type);
         }
 
+        fprintf(source, "    int ddp,\n");
+        fprintf(source, "    int max_rdma_write_chunk,\n");
+        fprintf(source, "    int max_rdma_reply_chunk,\n");
+
         if (has_reply_args) {
             fprintf(source,
                     "    void (*callback)(struct evpl *evpl, struct %s *reply, int status, void *callback_private_data),\n",
@@ -988,7 +992,7 @@ emit_program(
         if (has_args) {
             fprintf(source, "struct evpl_rpc2_rdma_chunk rdma_chunk;\n");
             fprintf(source, "    rdma_chunk.length = 0;\n");
-            fprintf(source, "    rdma_chunk.max_length = 64*1024*1024;\n");
+            fprintf(source, "    rdma_chunk.max_length = conn->rdma && ddp ? UINT32_MAX : 0;\n");
             fprintf(source, "    rdma_chunk.niov = 0;\n");
             fprintf(source, "    xdr_dbuf_reset(dbuf);\n");
             fprintf(source, "    xdr_dbuf_alloc_space(msg_iov, sizeof(*msg_iov) * 256, dbuf);\n");
@@ -1005,7 +1009,7 @@ emit_program(
             fprintf(source, "    evpl_iovec_commit(evpl, 0, &iov, 1);\n");
 
             fprintf(source, "    evpl_rpc2_call(evpl, program, conn, %d, "
-                    "msg_iov, msg_niov, len, conn->rdma ? &rdma_chunk : NULL, callback, callback_private_data);\n",
+                    "msg_iov, msg_niov, len, conn->rdma && ddp ? &rdma_chunk : NULL, max_rdma_write_chunk, max_rdma_reply_chunk, callback, callback_private_data);\n",
                     functionp->id);
         } else {
 
@@ -1014,7 +1018,7 @@ emit_program(
             fprintf(source, "    niov = evpl_iovec_alloc(evpl, program->reserve, 8, 1, &iov);\n");
 
             fprintf(source, "    evpl_rpc2_call(evpl, program, conn, %d, "
-                    "&iov, 1, program->reserve, callback, callback_private_data);\n",
+                    "&iov, 1, program->reserve,NULL, max_rdma_write_chunk, max_rdma_reply_chunk, callback, callback_private_data);\n",
                     functionp->id);
         }
 
@@ -1574,7 +1578,7 @@ main(
     DL_FOREACH(xdr_structs, xdr_structp)
     {
 
-        fprintf(source, "static void\n");
+        fprintf(source, "static FORCE_INLINE void\n");
         fprintf(source, "__marshall_%s(\n", xdr_structp->name);
         fprintf(source, "    const struct %s *in,\n", xdr_structp->name);
         fprintf(source, "    struct xdr_write_cursor *cursor) {\n");
@@ -1592,7 +1596,7 @@ main(
 
         fprintf(source, "}\n\n");
 
-        fprintf(source, "static int\n");
+        fprintf(source, "static FORCE_INLINE int\n");
         fprintf(source, "__unmarshall_%s(\n", xdr_structp->name);
         fprintf(source, "    struct %s *out,\n", xdr_structp->name);
         fprintf(source, "    struct xdr_read_cursor *cursor,\n");
@@ -1621,7 +1625,7 @@ main(
 
     DL_FOREACH(xdr_unions, xdr_unionp)
     {
-        fprintf(source, "static void\n");
+        fprintf(source, "static FORCE_INLINE void\n");
         fprintf(source, "__marshall_%s(\n", xdr_unionp->name);
         fprintf(source, "    const struct %s *in,\n", xdr_unionp->name);
         fprintf(source, "    struct xdr_write_cursor *cursor) {\n");
@@ -1662,7 +1666,7 @@ main(
         fprintf(source, "    ;\n");
         fprintf(source, "}\n\n");
 
-        fprintf(source, "static int\n");
+        fprintf(source, "static FORCE_INLINE int\n");
         fprintf(source, "__unmarshall_%s(\n", xdr_unionp->name);
         fprintf(source, "    struct %s *out,\n", xdr_unionp->name);
         fprintf(source, "    struct xdr_read_cursor *cursor,\n");

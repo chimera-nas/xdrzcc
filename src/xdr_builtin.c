@@ -738,7 +738,8 @@ __unmarshall_opaque_zerocopy(
 #if EVPL_RPC2
     if (cursor->read_chunk && cursor->read_chunk->length) {
         chunk = cursor->read_chunk;
-        if (chunk->xdr_position == cursor->offset) {
+        if (chunk->xdr_position == cursor->offset ||
+            chunk->xdr_position == UINT32_MAX) {
             v->iov    = chunk->iov;
             v->niov   = chunk->niov;
             v->length = chunk->length;
