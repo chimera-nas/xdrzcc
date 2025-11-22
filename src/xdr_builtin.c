@@ -100,13 +100,14 @@ struct xdr_write_cursor {
     void                        *scratch_data;
     int                          scratch_size;
     int                          scratch_used;
+    int                          scratch_reserved;
     int                          total;
     int                          ref_taken;
-    struct evpl_rpc2_rdma_chunk *write_chunk;
+    struct evpl_rpc2_rdma_chunk *rdma_chunk;
 };
 
 static FORCE_INLINE void
-xdr_read_cursor_init(
+xdr_read_cursor_vector_init(
     struct xdr_read_cursor      *cursor,
     const xdr_iovec             *iov,
     int                          niov,
@@ -117,7 +118,7 @@ xdr_read_cursor_init(
     cursor->iov_offset = 0;
     cursor->offset     = 0;
     cursor->read_chunk = read_chunk;
-} /* xdr_read_cursor_init */
+} /* xdr_read_cursor_vector_init */
 
 static FORCE_INLINE void
 xdr_write_cursor_init(
@@ -125,18 +126,19 @@ xdr_write_cursor_init(
     xdr_iovec                   *scratch_iov,
     xdr_iovec                   *out_iov,
     int                          out_niov,
-    struct evpl_rpc2_rdma_chunk *write_chunk,
+    struct evpl_rpc2_rdma_chunk *rdma_chunk,
     int                          out_offset)
 {
-    cursor->iov          = out_iov;
-    cursor->niov         = 0;
-    cursor->maxiov       = out_niov;
-    cursor->scratch_iov  = scratch_iov;
-    cursor->write_chunk  = write_chunk;
-    cursor->ref_taken    = 0;
-    cursor->scratch_used = out_offset;
-    cursor->scratch_data = xdr_iovec_data(scratch_iov);
-    cursor->scratch_size = xdr_iovec_len(scratch_iov);
+    cursor->iov              = out_iov;
+    cursor->niov             = 0;
+    cursor->maxiov           = out_niov;
+    cursor->scratch_iov      = scratch_iov;
+    cursor->rdma_chunk       = rdma_chunk;
+    cursor->ref_taken        = 0;
+    cursor->scratch_used     = out_offset;
+    cursor->scratch_reserved = out_offset;
+    cursor->scratch_data     = xdr_iovec_data(scratch_iov);
+    cursor->scratch_size     = xdr_iovec_len(scratch_iov);
 
     xdr_iovec_set_len(scratch_iov, 0);
 
@@ -178,7 +180,7 @@ xdr_write_cursor_flush(struct xdr_write_cursor *cursor)
 } /* xdr_write_cursor_flush */
 
 static inline int
-xdr_read_cursor_extract(
+xdr_read_cursor_vector_extract(
     struct xdr_read_cursor *cursor,
     void                   *out,
     unsigned int            bytes)
@@ -209,7 +211,7 @@ xdr_read_cursor_extract(
     }
 
     return bytes;
-} /* xdr_read_cursor_extract */
+} /* xdr_read_cursor_vector_extract */
 
 static inline void
 xdr_write_cursor_append(
@@ -229,7 +231,7 @@ xdr_write_cursor_append(
 } /* xdr_write_cursor_append */
 
 static inline int
-xdr_read_cursor_skip(
+xdr_read_cursor_vector_skip(
     struct xdr_read_cursor *cursor,
     unsigned int            bytes)
 {
@@ -262,7 +264,20 @@ xdr_read_cursor_skip(
     }
 
     return bytes;
-} /* xdr_read_cursor_skip */
+} /* xdr_read_cursor_vector_skip */
+
+static FORCE_INLINE void
+xdr_read_cursor_contig_init(
+    struct xdr_read_cursor      *cursor,
+    const xdr_iovec             *iov,
+    struct evpl_rpc2_rdma_chunk *read_chunk)
+{
+    cursor->cur        = iov;
+    cursor->last       = iov;
+    cursor->iov_offset = 0;
+    cursor->offset     = 0;
+    cursor->read_chunk = read_chunk;
+} /* xdr_read_cursor_contig_init */
 
 static FORCE_INLINE uint32_t
 __marshall_length_uint32_t(const uint32_t *v)
@@ -316,7 +331,7 @@ __marshall_uint32_t(
 } /* __marshall_uint32_t */
 
 static FORCE_INLINE int
-__unmarshall_uint32_t(
+__unmarshall_uint32_t_vector(
     uint32_t               *v,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
@@ -324,7 +339,7 @@ __unmarshall_uint32_t(
     uint32_t tmp;
     int      rc;
 
-    rc = xdr_read_cursor_extract(cursor, &tmp, 4);
+    rc = xdr_read_cursor_vector_extract(cursor, &tmp, 4);
 
     if (unlikely(rc < 0)) {
         return rc;
@@ -333,7 +348,19 @@ __unmarshall_uint32_t(
     *v = xdr_ntoh32(tmp);
 
     return 4;
-} /* __unmarshall_uint32_t */
+} /* __unmarshall_uint32_t_vector */
+
+static FORCE_INLINE int
+__unmarshall_uint32_t_contig(
+    uint32_t               *v,
+    struct xdr_read_cursor *cursor,
+    xdr_dbuf               *dbuf)
+{
+    *v                  = xdr_ntoh32(*(const uint32_t *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset));
+    cursor->iov_offset += 4;
+    cursor->offset     += 4;
+    return 4;
+} /* __unmarshall_uint32_t_contig */
 
 static FORCE_INLINE void
 __marshall_int32_t(
@@ -350,7 +377,7 @@ __marshall_int32_t(
 } /* __marshall_int32_t */
 
 static FORCE_INLINE int
-__unmarshall_int32_t(
+__unmarshall_int32_t_vector(
     int32_t                *v,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
@@ -358,7 +385,7 @@ __unmarshall_int32_t(
     int32_t tmp;
     int     rc;
 
-    rc = xdr_read_cursor_extract(cursor, &tmp, 4);
+    rc = xdr_read_cursor_vector_extract(cursor, &tmp, 4);
 
     if (unlikely(rc < 0)) {
         return rc;
@@ -367,7 +394,19 @@ __unmarshall_int32_t(
     *v = xdr_ntoh32(tmp);
 
     return 4;
-} /* __unmarshall_int32_t */
+} /* __unmarshall_int32_t_vector */
+
+static FORCE_INLINE int
+__unmarshall_int32_t_contig(
+    int32_t                *v,
+    struct xdr_read_cursor *cursor,
+    xdr_dbuf               *dbuf)
+{
+    *v                  = xdr_ntoh32(*(const int32_t *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset));
+    cursor->iov_offset += 4;
+    cursor->offset     += 4;
+    return 4;
+} /* __unmarshall_int32_t_contig */
 
 static FORCE_INLINE void
 __marshall_uint64_t(
@@ -384,7 +423,7 @@ __marshall_uint64_t(
 } /* __marshall_uint64_t */
 
 static FORCE_INLINE int
-__unmarshall_uint64_t(
+__unmarshall_uint64_t_vector(
     uint64_t               *v,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
@@ -392,7 +431,7 @@ __unmarshall_uint64_t(
     uint64_t tmp;
     int      rc;
 
-    rc = xdr_read_cursor_extract(cursor, &tmp, 8);
+    rc = xdr_read_cursor_vector_extract(cursor, &tmp, 8);
 
     if (unlikely(rc < 0)) {
         return rc;
@@ -401,7 +440,19 @@ __unmarshall_uint64_t(
     *v = xdr_ntoh64(tmp);
 
     return 8;
-} /* __unmarshall_uint64_t */
+} /* __unmarshall_uint64_t_vector */
+
+static FORCE_INLINE int
+__unmarshall_uint64_t_contig(
+    uint64_t               *v,
+    struct xdr_read_cursor *cursor,
+    xdr_dbuf               *dbuf)
+{
+    *v                  = xdr_ntoh64(*(const uint64_t *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset));
+    cursor->iov_offset += 8;
+    cursor->offset     += 8;
+    return 8;
+} /* __unmarshall_uint64_t_contig */
 
 static FORCE_INLINE void
 __marshall_int64_t(
@@ -418,7 +469,7 @@ __marshall_int64_t(
 } /* __marshall_int64_t */
 
 static FORCE_INLINE int
-__unmarshall_int64_t(
+__unmarshall_int64_t_vector(
     int64_t                *v,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
@@ -426,7 +477,7 @@ __unmarshall_int64_t(
     int64_t tmp;
     int     rc;
 
-    rc = xdr_read_cursor_extract(cursor, &tmp, 8);
+    rc = xdr_read_cursor_vector_extract(cursor, &tmp, 8);
 
     if (unlikely(rc < 0)) {
         return rc;
@@ -435,7 +486,19 @@ __unmarshall_int64_t(
     *v = xdr_ntoh64(tmp);
 
     return 8;
-} /* __unmarshall_int64_t */
+} /* __unmarshall_int64_t_vector */
+
+static FORCE_INLINE int
+__unmarshall_int64_t_contig(
+    int64_t                *v,
+    struct xdr_read_cursor *cursor,
+    xdr_dbuf               *dbuf)
+{
+    *v                  = xdr_ntoh64(*(const int64_t *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset));
+    cursor->iov_offset += 8;
+    cursor->offset     += 8;
+    return 8;
+} /* __unmarshall_int64_t_contig */
 
 static FORCE_INLINE void
 __marshall_float(
@@ -446,13 +509,25 @@ __marshall_float(
 } /* __marshall_float */
 
 static FORCE_INLINE int
-__unmarshall_float(
+__unmarshall_float_vector(
     float                  *v,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
-    return xdr_read_cursor_extract(cursor, v, 4);
-} /* __unmarshall_float */
+    return xdr_read_cursor_vector_extract(cursor, v, 4);
+} /* __unmarshall_float_vector */
+
+static FORCE_INLINE int
+__unmarshall_float_contig(
+    float                  *v,
+    struct xdr_read_cursor *cursor,
+    xdr_dbuf               *dbuf)
+{
+    *v                  = *(const float *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset);
+    cursor->iov_offset += 4;
+    cursor->offset     += 4;
+    return 4;
+} /* __unmarshall_float_contig */
 
 static FORCE_INLINE void
 __marshall_double(
@@ -463,13 +538,25 @@ __marshall_double(
 } /* __marshall_double */
 
 static FORCE_INLINE int
-__unmarshall_double(
+__unmarshall_double_vector(
     double                 *v,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
-    return xdr_read_cursor_extract(cursor, v, 8);
-} /* __unmarshall_double */
+    return xdr_read_cursor_vector_extract(cursor, v, 8);
+} /* __unmarshall_double_vector */
+
+static FORCE_INLINE int
+__unmarshall_double_contig(
+    double                 *v,
+    struct xdr_read_cursor *cursor,
+    xdr_dbuf               *dbuf)
+{
+    *v                  = *(const double *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset);
+    cursor->iov_offset += 8;
+    cursor->offset     += 8;
+    return 8;
+} /* __unmarshall_double_contig */
 
 static FORCE_INLINE void
 __marshall_xdr_string(
@@ -491,14 +578,14 @@ __marshall_xdr_string(
 } /* __marshall_xdr_string */
 
 static FORCE_INLINE int
-__unmarshall_xdr_string(
+__unmarshall_xdr_string_vector(
     xdr_string             *str,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
     int rc, pad, len = 0;
 
-    rc = __unmarshall_uint32_t(&str->len, cursor, dbuf);
+    rc = __unmarshall_uint32_t_vector(&str->len, cursor, dbuf);
 
     if (unlikely(rc < 0)) {
         return rc;
@@ -519,7 +606,7 @@ __unmarshall_xdr_string(
     } else {
         xdr_dbuf_alloc_space(str->str, str->len, dbuf);
 
-        rc = xdr_read_cursor_extract(cursor, str->str, str->len);
+        rc = xdr_read_cursor_vector_extract(cursor, str->str, str->len);
 
         if (unlikely(rc < 0)) {
             return rc;
@@ -531,7 +618,7 @@ __unmarshall_xdr_string(
     pad  = (4 - (str->len & 0x3)) & 0x3;
 
     if (pad) {
-        rc = xdr_read_cursor_skip(cursor, pad);
+        rc = xdr_read_cursor_vector_skip(cursor, pad);
 
         if (unlikely(rc < 0)) {
             return rc;
@@ -541,14 +628,43 @@ __unmarshall_xdr_string(
     }
 
     return len;
-} /* __unmarshall_xdr_string */
+} /* __unmarshall_xdr_string_vector */
+
+static FORCE_INLINE int
+__unmarshall_xdr_string_contig(
+    xdr_string             *str,
+    struct xdr_read_cursor *cursor,
+    xdr_dbuf               *dbuf)
+{
+    int rc, pad, len = 0;
+
+    rc = __unmarshall_uint32_t_contig(&str->len, cursor, dbuf);
+    if (unlikely(rc < 0)) {
+        return rc;
+    }
+    len += rc;
+
+    str->str            = (char *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset);
+    cursor->iov_offset += str->len;
+    cursor->offset     += str->len;
+    len                += str->len;
+
+    pad = (4 - (str->len & 0x3)) & 0x3;
+    if (pad) {
+        cursor->iov_offset += pad;
+        cursor->offset     += pad;
+        len                += pad;
+    }
+
+    return len;
+} /* __unmarshall_xdr_string_contig */
 
 
 
 
 
 static FORCE_INLINE int
-__unmarshall_opaque_fixed(
+__unmarshall_opaque_fixed_vector(
     xdr_iovecr             *v,
     uint32_t                size,
     struct xdr_read_cursor *cursor,
@@ -590,10 +706,39 @@ __unmarshall_opaque_fixed(
 
     pad = (4 - (size & 0x3)) & 0x3;
 
-    xdr_read_cursor_skip(cursor, pad);
+    xdr_read_cursor_vector_skip(cursor, pad);
 
     return size + pad;
-} /* __unmarshall_opaque_fixed */
+} /* __unmarshall_opaque_fixed_vector */
+
+static FORCE_INLINE int
+__unmarshall_opaque_fixed_contig(
+    xdr_iovecr             *v,
+    uint32_t                size,
+    struct xdr_read_cursor *cursor,
+    xdr_dbuf               *dbuf)
+{
+    int pad;
+
+    v->length = size;
+    v->niov   = 1;
+    xdr_dbuf_alloc_space(v->iov, sizeof(*v->iov), dbuf);
+
+    xdr_iovec_set_data(&v->iov[0], (void *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset));
+    xdr_iovec_set_len(&v->iov[0], size);
+    xdr_iovec_move_private(&v->iov[0], cursor->cur);
+
+    cursor->iov_offset += size;
+    cursor->offset     += size;
+
+    pad = (4 - (size & 0x3)) & 0x3;
+    if (pad) {
+        cursor->iov_offset += pad;
+        cursor->offset     += pad;
+    }
+
+    return size + pad;
+} /* __unmarshall_opaque_fixed_contig */
 
 static FORCE_INLINE void
 __marshall_opaque(
@@ -627,10 +772,11 @@ __marshall_opaque_zerocopy(
     __marshall_uint32_t(&v->length, cursor);
 
 #if EVPL_RPC2
-    if (cursor->write_chunk && cursor->write_chunk->max_length) {
-        cursor->write_chunk->iov    = v->iov;
-        cursor->write_chunk->niov   = v->niov;
-        cursor->write_chunk->length = v->length;
+    if (cursor->rdma_chunk && v->length <= cursor->rdma_chunk->max_length) {
+        cursor->rdma_chunk->iov          = v->iov;
+        cursor->rdma_chunk->niov         = v->niov;
+        cursor->rdma_chunk->length       = v->length;
+        cursor->rdma_chunk->xdr_position = cursor->scratch_used - cursor->scratch_reserved;
         return;
     }
  #endif /* if EVPL_RPC2 */
@@ -670,7 +816,7 @@ __marshall_opaque_zerocopy(
 } /* __marshall_opaque_zerocopy */
 
 static FORCE_INLINE int
-__unmarshall_opaque(
+__unmarshall_opaque_vector(
     xdr_opaque             *v,
     uint32_t                bound,
     struct xdr_read_cursor *cursor,
@@ -678,7 +824,7 @@ __unmarshall_opaque(
 {
     int rc, pad;
 
-    rc = __unmarshall_uint32_t(&v->len, cursor, dbuf);
+    rc = __unmarshall_uint32_t_vector(&v->len, cursor, dbuf);
 
     if (unlikely(rc < 0)) {
         return rc;
@@ -696,7 +842,7 @@ __unmarshall_opaque(
     } else {
         xdr_dbuf_alloc_space(v->data, v->len, dbuf);
 
-        rc = xdr_read_cursor_extract(cursor, v->data, v->len);
+        rc = xdr_read_cursor_vector_extract(cursor, v->data, v->len);
 
         if (unlikely(rc < 0)) {
             return rc;
@@ -706,7 +852,7 @@ __unmarshall_opaque(
     pad = (4 - (v->len & 0x3)) & 0x3;
 
     if (pad) {
-        rc = xdr_read_cursor_skip(cursor, pad);
+        rc = xdr_read_cursor_vector_skip(cursor, pad);
 
         if (unlikely(rc < 0)) {
             return rc;
@@ -714,10 +860,40 @@ __unmarshall_opaque(
     }
 
     return 4 + v->len + pad;
-} /* __unmarshall_opaque_variable_bound */
+} /* __unmarshall_opaque_variable_bound_vector */
 
 static FORCE_INLINE int
-__unmarshall_opaque_zerocopy(
+__unmarshall_opaque_contig(
+    xdr_opaque             *v,
+    uint32_t                bound,
+    struct xdr_read_cursor *cursor,
+    xdr_dbuf               *dbuf)
+{
+    int rc, pad, len = 0;
+
+    rc = __unmarshall_uint32_t_contig(&v->len, cursor, dbuf);
+    if (unlikely(rc < 0)) {
+        return rc;
+    }
+    len += rc;
+
+    v->data             = (void *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset);
+    cursor->iov_offset += v->len;
+    cursor->offset     += v->len;
+    len                += v->len;
+
+    pad = (4 - (v->len & 0x3)) & 0x3;
+    if (pad) {
+        cursor->iov_offset += pad;
+        cursor->offset     += pad;
+        len                += pad;
+    }
+
+    return len;
+} /* __unmarshall_opaque_contig */
+
+static FORCE_INLINE int
+__unmarshall_opaque_zerocopy_vector(
     xdr_iovecr             *v,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
@@ -726,7 +902,7 @@ __unmarshall_opaque_zerocopy(
     uint32_t                     size;
     struct evpl_rpc2_rdma_chunk *chunk;
 
-    rc = __unmarshall_uint32_t(&size, cursor, dbuf);
+    rc = __unmarshall_uint32_t_vector(&size, cursor, dbuf);
 
     if (unlikely(rc < 0)) {
         return rc;
@@ -735,7 +911,8 @@ __unmarshall_opaque_zerocopy(
 #if EVPL_RPC2
     if (cursor->read_chunk && cursor->read_chunk->length) {
         chunk = cursor->read_chunk;
-        if (chunk->xdr_position == cursor->offset) {
+        if (chunk->xdr_position == cursor->offset ||
+            chunk->xdr_position == UINT32_MAX) {
             v->iov    = chunk->iov;
             v->niov   = chunk->niov;
             v->length = chunk->length;
@@ -744,14 +921,51 @@ __unmarshall_opaque_zerocopy(
     }
 #endif /* if EVPL_RPC2 */
 
-    rc = __unmarshall_opaque_fixed(v, size, cursor, dbuf);
+    rc = __unmarshall_opaque_fixed_vector(v, size, cursor, dbuf);
 
     if (unlikely(rc < 0)) {
         return rc;
     }
 
     return 4 + rc;
-} /* __unmarshall_opaque_variable */
+} /* __unmarshall_opaque_variable_vector */
+
+static FORCE_INLINE int
+__unmarshall_opaque_zerocopy_contig(
+    xdr_iovecr             *v,
+    struct xdr_read_cursor *cursor,
+    xdr_dbuf               *dbuf)
+{
+    int      rc, len = 0;
+    uint32_t size;
+
+    rc = __unmarshall_uint32_t_contig(&size, cursor, dbuf);
+    if (unlikely(rc < 0)) {
+        return rc;
+    }
+    len += rc;
+
+#if EVPL_RPC2
+    if (cursor->read_chunk && cursor->read_chunk->length) {
+        struct evpl_rpc2_rdma_chunk *chunk = cursor->read_chunk;
+        if (chunk->xdr_position == cursor->offset ||
+            chunk->xdr_position == UINT32_MAX) {
+            v->iov    = chunk->iov;
+            v->niov   = chunk->niov;
+            v->length = chunk->length;
+            return len;
+        }
+    }
+#endif /* if EVPL_RPC2 */
+
+    rc = __unmarshall_opaque_fixed_contig(v, size, cursor, dbuf);
+    if (unlikely(rc < 0)) {
+        return rc;
+    }
+    len += rc;
+
+    return len;
+} /* __unmarshall_opaque_zerocopy_contig */
 
 static FORCE_INLINE int
 is_ascii(

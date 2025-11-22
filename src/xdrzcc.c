@@ -199,20 +199,20 @@ emit_unmarshall(
     if (type->opaque) {
         if (type->array) {
             fprintf(output,
-                    "    rc = xdr_read_cursor_extract(cursor, out->%s, %s);\n",
+                    "    rc = xdr_read_cursor_vector_extract(cursor, out->%s, %s);\n",
                     name, type->array_size);
         } else if (type->zerocopy) {
             fprintf(output,
-                    "    rc = __unmarshall_opaque_zerocopy(&out->%s, cursor, dbuf);\n",
+                    "    rc = __unmarshall_opaque_zerocopy_vector(&out->%s, cursor, dbuf);\n",
                     name);
         } else {
             fprintf(output,
-                    "    rc = __unmarshall_opaque(&out->%s, %s, cursor, dbuf);\n",
+                    "    rc = __unmarshall_opaque_vector(&out->%s, %s, cursor, dbuf);\n",
                     name, type->vector_bound ? type->vector_bound : "0");
         }
     } else if (strcmp(type->name, "xdr_string") == 0) {
         fprintf(output,
-                "    rc = __unmarshall_%s(&out->%s, cursor, dbuf);\n",
+                "    rc = __unmarshall_%s_vector(&out->%s, cursor, dbuf);\n",
                 type->name, name);
     } else if (type->linkedlist) {
 
@@ -228,7 +228,7 @@ emit_unmarshall(
         fprintf(output, "    {\n");
         fprintf(output, "            uint32_t more;\n");
         fprintf(output,
-                "        rc = __unmarshall_uint32_t(&more, cursor, dbuf);\n")
+                "        rc = __unmarshall_uint32_t_vector(&more, cursor, dbuf);\n")
         ;
         fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "        len += rc;\n");
@@ -238,7 +238,7 @@ emit_unmarshall(
         fprintf(output, "        while (more) {\n");
         fprintf(output, "          xdr_dbuf_alloc_space(current, sizeof(*current), dbuf);\n");
         fprintf(output,
-                "        rc = __unmarshall_%s(current, cursor, dbuf);\n",
+                "        rc = __unmarshall_%s_vector(current, cursor, dbuf);\n",
                 type->name);
         fprintf(output, "         if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "         len += rc;\n");
@@ -249,7 +249,7 @@ emit_unmarshall(
         fprintf(output, "        }\n");
         fprintf(output, "         last = current;\n");
         fprintf(output, "        last->%s = NULL;\n", liststruct->nextmember);
-        fprintf(output, "         rc = __unmarshall_uint32_t(&more, cursor, dbuf);\n");
+        fprintf(output, "         rc = __unmarshall_uint32_t_vector(&more, cursor, dbuf);\n");
         fprintf(output, "         if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "         len += rc;\n");
         fprintf(output, "        }\n");
@@ -259,7 +259,7 @@ emit_unmarshall(
         fprintf(output, "    {\n");
         fprintf(output, "        uint32_t more;\n");
         fprintf(output,
-                "        rc = __unmarshall_uint32_t(&more, cursor, dbuf);\n")
+                "        rc = __unmarshall_uint32_t_vector(&more, cursor, dbuf);\n")
         ;
         fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "        len += rc;\n");
@@ -267,7 +267,7 @@ emit_unmarshall(
         fprintf(output, "        if (more) {\n");
         fprintf(output, "         xdr_dbuf_alloc_space(out->%s, sizeof(*out->%s), dbuf);\n", name, name);
         fprintf(output,
-                "        rc = __unmarshall_%s(out->%s, cursor, dbuf);\n",
+                "        rc = __unmarshall_%s_vector(out->%s, cursor, dbuf);\n",
                 type->name, name);
         fprintf(output, "        } else {\n");
         fprintf(output, "            out->%s = NULL;\n", name);
@@ -275,7 +275,7 @@ emit_unmarshall(
         fprintf(output, "    }\n");
     } else if (type->vector) {
         fprintf(output,
-                "    rc = __unmarshall_uint32_t(&out->num_%s, cursor, dbuf);\n",
+                "    rc = __unmarshall_uint32_t_vector(&out->num_%s, cursor, dbuf);\n",
                 name);
         fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "    len += rc;\n");
@@ -283,7 +283,7 @@ emit_unmarshall(
                 name, name);
         fprintf(output, "    for (int i = 0; i < out->num_%s; i++) {\n", name);
         fprintf(output,
-                "    rc = __unmarshall_%s(&out->%s[i], cursor, dbuf);\n",
+                "    rc = __unmarshall_%s_vector(&out->%s[i], cursor, dbuf);\n",
                 type->name, name);
         fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "        len += rc;\n");
@@ -293,7 +293,7 @@ emit_unmarshall(
         fprintf(output, "    for (int i = 0; i < %s; i++) {\n",
                 type->array_size);
         fprintf(output,
-                "    rc = __unmarshall_%s(&out->%s[i], cursor, dbuf);\n",
+                "    rc = __unmarshall_%s_vector(&out->%s[i], cursor, dbuf);\n",
                 type->name, name);
         fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "        len += rc;\n");
@@ -301,13 +301,144 @@ emit_unmarshall(
         fprintf(output, "    rc = 0;\n");
     } else {
         fprintf(output,
-                "    rc = __unmarshall_%s(&out->%s, cursor, dbuf);\n",
+                "    rc = __unmarshall_%s_vector(&out->%s, cursor, dbuf);\n",
                 type->name, name);
     }
 
     fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
     fprintf(output, "    len += rc;\n");
 } /* emit_unmarshall */
+
+void
+emit_unmarshall_contig(
+    FILE            *output,
+    const char      *name,
+    struct xdr_type *type)
+{
+    struct xdr_identifier *chk;
+    struct xdr_struct     *liststruct;
+
+    if (type->opaque) {
+        if (type->array) {
+            fprintf(output,
+                    "    memcpy(out->%s, xdr_iovec_data(cursor->cur) + cursor->iov_offset, %s);\n",
+                    name, type->array_size);
+            fprintf(output, "    cursor->iov_offset += %s;\n", type->array_size);
+            fprintf(output, "    cursor->offset += %s;\n", type->array_size);
+            fprintf(output, "    len += %s;\n", type->array_size);
+            fprintf(output, "    rc = 0;\n");
+        } else if (type->zerocopy) {
+            fprintf(output,
+                    "    rc = __unmarshall_opaque_zerocopy_contig(&out->%s, cursor, dbuf);\n",
+                    name);
+            fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
+        } else {
+            fprintf(output,
+                    "    rc = __unmarshall_opaque_contig(&out->%s, %s, cursor, dbuf);\n",
+                    name, type->vector_bound ? type->vector_bound : "0");
+            fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
+        }
+    } else if (strcmp(type->name, "xdr_string") == 0) {
+        fprintf(output,
+                "    rc = __unmarshall_%s_contig(&out->%s, cursor, dbuf);\n",
+                type->name, name);
+        fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
+    } else if (type->linkedlist) {
+
+        HASH_FIND_STR(xdr_identifiers, type->name, chk);
+
+        if (!chk) {
+            fprintf(stderr, "Linked list '%s' not found.\n", type->name);
+            exit(1);
+        }
+
+        liststruct = (struct xdr_struct *) chk->ptr;
+
+        fprintf(output, "    {\n");
+        fprintf(output, "            uint32_t more;\n");
+        fprintf(output,
+                "        rc = __unmarshall_uint32_t_contig(&more, cursor, dbuf);\n")
+        ;
+        fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "        len += rc;\n");
+
+        fprintf(output, "        out->%s = NULL;\n", name);
+        fprintf(output, "        struct %s *current = NULL, *last = NULL;\n", type->name);
+        fprintf(output, "        while (more) {\n");
+        fprintf(output, "          xdr_dbuf_alloc_space(current, sizeof(*current), dbuf);\n");
+        fprintf(output,
+                "        rc = __unmarshall_%s_contig(current, cursor, dbuf);\n",
+                type->name);
+        fprintf(output, "         if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "         len += rc;\n");
+        fprintf(output, "         if (last) {\n");
+        fprintf(output, "             last->%s = current;\n", liststruct->nextmember);
+        fprintf(output, "         } else {\n");
+        fprintf(output, "             out->%s = current;\n", name);
+        fprintf(output, "        }\n");
+        fprintf(output, "         last = current;\n");
+        fprintf(output, "        last->%s = NULL;\n", liststruct->nextmember);
+        fprintf(output, "         rc = __unmarshall_uint32_t_contig(&more, cursor, dbuf);\n");
+        fprintf(output, "         if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "         len += rc;\n");
+        fprintf(output, "        }\n");
+        fprintf(output, "        rc = 0;\n");
+        fprintf(output, "    }\n");
+    } else if (type->optional) {
+        fprintf(output, "    {\n");
+        fprintf(output, "        uint32_t more;\n");
+        fprintf(output,
+                "        rc = __unmarshall_uint32_t_contig(&more, cursor, dbuf);\n")
+        ;
+        fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "        len += rc;\n");
+        fprintf(output, "        rc = 0;\n");
+        fprintf(output, "        if (more) {\n");
+        fprintf(output, "         xdr_dbuf_alloc_space(out->%s, sizeof(*out->%s), dbuf);\n", name, name);
+        fprintf(output,
+                "        rc = __unmarshall_%s_contig(out->%s, cursor, dbuf);\n",
+                type->name, name);
+        fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "        len += rc;\n");
+        fprintf(output, "        } else {\n");
+        fprintf(output, "            out->%s = NULL;\n", name);
+        fprintf(output, "        };\n");
+        fprintf(output, "    }\n");
+    } else if (type->vector) {
+        fprintf(output,
+                "    rc = __unmarshall_uint32_t_contig(&out->num_%s, cursor, dbuf);\n",
+                name);
+        fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "    len += rc;\n");
+        fprintf(output, "     xdr_dbuf_reserve(out, %s, out->num_%s, dbuf);\n",
+                name, name);
+        fprintf(output, "    for (int i = 0; i < out->num_%s; i++) {\n", name);
+        fprintf(output,
+                "    rc = __unmarshall_%s_contig(&out->%s[i], cursor, dbuf);\n",
+                type->name, name);
+        fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "        len += rc;\n");
+        fprintf(output, "    }\n");
+        fprintf(output, "    rc = 0;\n");
+    } else if (type->array) {
+        fprintf(output, "    for (int i = 0; i < %s; i++) {\n",
+                type->array_size);
+        fprintf(output,
+                "    rc = __unmarshall_%s_contig(&out->%s[i], cursor, dbuf);\n",
+                type->name, name);
+        fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "        len += rc;\n");
+        fprintf(output, "    }\n");
+        fprintf(output, "    rc = 0;\n");
+    } else {
+        fprintf(output,
+                "    rc = __unmarshall_%s_contig(&out->%s, cursor, dbuf);\n",
+                type->name, name);
+        fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
+    }
+
+    fprintf(output, "    len += rc;\n");
+} /* emit_unmarshall_contig */
 
 void
 emit_internal_headers(
@@ -321,7 +452,13 @@ emit_internal_headers(
     fprintf(source, "    struct xdr_write_cursor *cursor);\n\n");
 
     fprintf(source, "static int\n");
-    fprintf(source, "__unmarshall_%s(\n", name);
+    fprintf(source, "__unmarshall_%s_vector(\n", name);
+    fprintf(source, "    struct %s *out,\n", name);
+    fprintf(source, "    struct xdr_read_cursor *cursor,\n");
+    fprintf(source, "    xdr_dbuf *dbuf);\n\n");
+
+    fprintf(source, "static int\n");
+    fprintf(source, "__unmarshall_%s_contig(\n", name);
     fprintf(source, "    struct %s *out,\n", name);
     fprintf(source, "    struct xdr_read_cursor *cursor,\n");
     fprintf(source, "    xdr_dbuf *dbuf);\n\n");
@@ -341,14 +478,14 @@ emit_wrapper_headers(
     fprintf(header, "    xdr_iovec *iov_in,\n");
     fprintf(header, "    xdr_iovec *iov_out,\n");
     fprintf(header, "    int *niov_out,\n");
-    fprintf(header, "    struct evpl_rpc2_rdma_chunk *write_chunk,\n");
+    fprintf(header, "    struct evpl_rpc2_rdma_chunk *rdma_chunk,\n");
     fprintf(header, "    int out_offset);\n\n");
 
     fprintf(header, "int unmarshall_%s(\n", name);
     fprintf(header, "    struct %s *out,\n", name);
     fprintf(header, "    const xdr_iovec *iov,\n");
     fprintf(header, "    int niov,\n");
-    fprintf(header, "    struct evpl_rpc2_rdma_chunk *read_chunk,\n");
+    fprintf(header, "    struct evpl_rpc2_rdma_chunk *rdma_chunk,\n");
     fprintf(header, "    xdr_dbuf *dbuf);\n\n");
 
     fprintf(header, "int marshall_length_%s(const struct %s *in);\n\n", name, name);
@@ -687,6 +824,50 @@ emit_program_header(
     {
 
         if (strcmp(functionp->call_type->name, "void")) {
+            if (strcmp(functionp->reply_type->name, "void")) {
+                fprintf(header,
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, struct %s *, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, struct %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                        functionp->name,
+                        functionp->call_type->name,
+                        functionp->reply_type->name
+                        );
+            } else {
+                fprintf(header,
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, struct %s *, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, int status, void *callback_private_data), void *callback_private_data);\n",
+                        functionp->name,
+                        functionp->call_type->name
+                        );
+            }
+
+        } else {
+            if (strcmp(functionp->reply_type->name, "void")) {
+                fprintf(header,
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, struct %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                        functionp->name,
+                        functionp->reply_type->name
+                        );
+            } else {
+                fprintf(header,
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, int status, void *callback_private_data), void *callback_private_data);\n",
+                        functionp->name
+                        );
+
+            }
+        }
+
+        if (strcmp(functionp->reply_type->name, "void")) {
+            fprintf(header,
+                    "   int (*send_reply_%s)(struct evpl *evpl, struct %s *, void *);\n",
+                    functionp->name,
+                    functionp->reply_type->name);
+
+        } else {
+            fprintf(header,
+                    "   int (*send_reply_%s)(struct evpl *evpl, void *);\n",
+                    functionp->name);
+        }
+
+        if (strcmp(functionp->call_type->name, "void")) {
             fprintf(header,
                     "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, struct %s *, struct evpl_rpc2_msg *, void *);\n",
                     functionp->name,
@@ -699,25 +880,17 @@ emit_program_header(
 
         if (strcmp(functionp->reply_type->name, "void")) {
             fprintf(header,
-                    "   void (*send_reply_%s)(struct evpl *evpl, struct %s *, void *);\n",
-                    functionp->name,
-                    functionp->reply_type->name);
-
+                    "    void (*recv_reply_%s)(struct evpl *evpl, "
+                    "struct %s *reply, int status, void *callback_private_data);\n",
+                    functionp->name, functionp->reply_type->name);
         } else {
             fprintf(header,
-                    "   void (*send_reply_%s)(struct evpl *evpl, void *);\n",
-                    functionp->name);
-        }
-
-        if (strcmp(functionp->reply_type->name, "void")) {
-            fprintf(header, "   void (*reply_%s)(struct %s *);\n",
-                    functionp->name,
-                    functionp->reply_type->name);
-        } else {
-            fprintf(header, "   void (*reply_%s)(void);\n",
+                    "    void (*recv_reply_%s)(struct evpl *evpl, "
+                    "int status, void *callback_private_data);\n",
                     functionp->name);
         }
     }
+
     fprintf(header, "};\n\n");
 
     fprintf(header, "void %s_init(struct %s *);\n",
@@ -790,7 +963,7 @@ emit_program(
             fprintf(source,
                     "        len = unmarshall_%s(%s_arg, iov, niov, &msg->read_chunk, msg->dbuf);\n",
                     functionp->call_type->name, functionp->name);
-            fprintf(source, "        if (unlikely(len != length)) abort();\n");
+            fprintf(source, "        if (unlikely(len != length)) return 2;\n");
             fprintf(source, "        if (len < 0) return 2;\n");
 
             /* Then make the call */
@@ -813,12 +986,78 @@ emit_program(
     fprintf(source, "    return 0;\n");
     fprintf(source, "}\n\n");
 
+
+    fprintf(source, "static int\n");
+    fprintf(source, "reply_dispatch_%s(\n", version->name);
+    fprintf(source, "    struct evpl *evpl,\n");
+    fprintf(source, "    struct evpl_rpc2_conn *conn,\n");
+    fprintf(source, "    struct evpl_rpc2_msg *msg,\n");
+    fprintf(source, "    xdr_iovec *iov,\n");
+    fprintf(source, "    int niov,\n");
+    fprintf(source, "    int length,\n");
+    fprintf(source, "    void *callback_fn,\n");
+    fprintf(source, "    void *callback_private_data)\n");
+    fprintf(source, "{\n");
+    fprintf(source, "    struct %s *prog = msg->program->program_data;\n",
+            version->name);
+    fprintf(source, "    int len;\n");
+    fprintf(source, "    switch (msg->proc) {\n");
+
+    for (functionp = version->functions; functionp != NULL; functionp =
+             functionp->next) {
+
+        if (functionp->id > maxproc) {
+            maxproc = functionp->id;
+        }
+
+        fprintf(source, "    case %d:\n", functionp->id);
+
+        /* Call has an argument */
+        if (strcmp(functionp->reply_type->name, "void")) {
+            /* We will unmarshall argument into provided buffer */
+            fprintf(source, "        struct %s *%s_arg;\n",
+                    functionp->reply_type->name,
+                    functionp->name);
+            fprintf(source, "        xdr_dbuf_alloc_space(%s_arg, sizeof(*%s_arg), msg->dbuf);\n",
+                    functionp->name, functionp->name);
+            fprintf(source,
+                    "        len = unmarshall_%s(%s_arg, iov, niov, &msg->read_chunk, msg->dbuf);\n",
+                    functionp->reply_type->name, functionp->name);
+            fprintf(source, "        if (unlikely(len != length)) return 2;\n");
+            fprintf(source, "        if (len < 0) return 2;\n");
+
+            /* Then make the call */
+            fprintf(source,
+                    " void (*callback_%s)(struct evpl *evpl, struct %s *reply, int status, void *callback_private_data) = callback_fn;\n",
+                    functionp->name, functionp->reply_type->name);
+            fprintf(source,
+                    "        callback_%s(evpl, %s_arg, 0, callback_private_data);\n",
+                    functionp->name, functionp->name);
+        } else {
+            fprintf(source,
+                    " void (*callback_%s)(struct evpl *evpl, int status, void *callback_private_data) = callback_fn;\n",
+                    functionp->name);
+            /* No argument, just make the call */
+            fprintf(source,
+                    "        callback_%s(evpl, 0, callback_private_data);\n",
+                    functionp->name);
+
+        }
+        fprintf(source, "        break;\n\n");
+    }
+
+    fprintf(source, "    default:\n");
+    fprintf(source, "        return 2;\n");
+    fprintf(source, "    }\n");
+    fprintf(source, "    return 0;\n");
+    fprintf(source, "}\n\n");
+
     for (functionp = version->functions; functionp != NULL; functionp =
              functionp->next) {
 
         if (strcmp(functionp->reply_type->name, "void")) {
             fprintf(source,
-                    "void send_reply_%s(struct evpl *evpl, struct %s *arg, void *private_data)\n",
+                    "static int send_reply_%s(struct evpl *evpl, struct %s *arg, void *private_data)\n",
                     functionp->name, functionp->reply_type->name);
             fprintf(source, "{\n");
             fprintf(source, "    struct evpl_rpc2_msg *msg = private_data;\n");
@@ -827,19 +1066,19 @@ emit_program(
             fprintf(source, "    xdr_dbuf_alloc_space(msg_iov, sizeof(*msg_iov) * 256, msg->dbuf);\n");
             fprintf(source,
                     "    niov = evpl_iovec_reserve(evpl, 128*1024, 8, 1, &iov);\n");
-            fprintf(source, "    if (unlikely(niov != 1)) return;\n");
+            fprintf(source, "    if (unlikely(niov != 1)) return 1;\n");
             fprintf(source,
                     "    len = marshall_%s(arg, &iov, msg_iov, &msg_niov, &msg->write_chunk, msg->program->reserve);\n",
                     functionp->reply_type->name);
-            fprintf(source, "    if (unlikely(len < 0)) abort();\n");
+            fprintf(source, "    if (unlikely(len < 0)) return 2;\n");
             fprintf(source, "    xdr_iovec_set_len(&iov, len + msg->program->reserve);\n");
             fprintf(source,
                     "    evpl_iovec_commit(evpl, 0, &iov, 1);\n");
             fprintf(source,
-                    "    msg->program->reply_dispatch(evpl, msg, msg_iov, msg_niov, len);\n");
+                    "    msg->program->send_reply_dispatch(evpl, msg, msg_iov, msg_niov, len);\n");
         } else {
             fprintf(source,
-                    "void send_reply_%s(struct evpl *evpl, void *private_data)\n",
+                    "int send_reply_%s(struct evpl *evpl, void *private_data)\n",
                     functionp->name);
             fprintf(source, "{\n");
             fprintf(source, "    struct evpl_rpc2_msg *msg = private_data;\n");
@@ -847,12 +1086,81 @@ emit_program(
             fprintf(source, "    int niov, len;\n");
             fprintf(source, "    niov = evpl_iovec_alloc(evpl, msg->program->reserve, 8, 1, &iov);\n");
             fprintf(source,
-                    "    msg->program->reply_dispatch(evpl, msg, &iov, niov, msg->program->reserve);\n")
+                    "    msg->program->send_reply_dispatch(evpl, msg, &iov, niov, msg->program->reserve);\n")
             ;
+        }
+        fprintf(source, "    return 0;\n");
+        fprintf(source, "}\n\n");
+
+        const char *arg_type       = functionp->call_type->name;
+        int         has_args       = strcmp(arg_type, "void") != 0;
+        int         has_reply_args = strcmp(functionp->reply_type->name, "void") != 0;
+
+        fprintf(source, "static void\n");
+        fprintf(source, "send_call_%s(\n", functionp->name);
+        fprintf(source, "    struct evpl_rpc2_program *program,\n");
+        fprintf(source, "    struct evpl *evpl,\n");
+        fprintf(source, "    struct evpl_rpc2_conn *conn,\n");
+
+        if (has_args) {
+            fprintf(source, "    struct %s *args,\n", arg_type);
+        }
+
+        fprintf(source, "    int ddp,\n");
+        fprintf(source, "    int max_rdma_write_chunk,\n");
+        fprintf(source, "    int max_rdma_reply_chunk,\n");
+
+        if (has_reply_args) {
+            fprintf(source,
+                    "    void (*callback)(struct evpl *evpl, struct %s *reply, int status, void *callback_private_data),\n",
+                    functionp->reply_type->name);
+        } else {
+            fprintf(source, "    void (*callback)(struct evpl *evpl, int status, void *callback_private_data),\n");
+        }
+
+
+
+        fprintf(source, "    void *callback_private_data)\n");
+        fprintf(source, "{\n");
+        fprintf(source, "    struct evpl_iovec iov, *msg_iov;\n");
+        fprintf(source, "    int msg_niov = 256, len;\n");
+        fprintf(source, "    xdr_dbuf *dbuf = (xdr_dbuf *) conn->thread_dbuf;\n");
+
+        if (has_args) {
+            fprintf(source, "struct evpl_rpc2_rdma_chunk rdma_chunk;\n");
+            fprintf(source, "    rdma_chunk.length = 0;\n");
+            fprintf(source, "    rdma_chunk.max_length = conn->rdma && ddp ? UINT32_MAX : 0;\n");
+            fprintf(source, "    rdma_chunk.niov = 0;\n");
+            fprintf(source, "    xdr_dbuf_reset(dbuf);\n");
+            fprintf(source, "    xdr_dbuf_alloc_space(msg_iov, sizeof(*msg_iov) * 256, dbuf);\n");
+            fprintf(source, "    evpl_iovec_reserve(evpl, 128*1024, 8, 1, &iov);\n\n");
+
+            fprintf(source, "    len = marshall_%s(args, &iov, msg_iov, &msg_niov, "
+                    "&rdma_chunk, program->reserve);\n", arg_type);
+            fprintf(source, "    if (unlikely(len < 0)) {\n");
+            fprintf(source, "        xdr_dbuf_free(dbuf);\n");
+            fprintf(source, "        return;\n");
+            fprintf(source, "    }\n\n");
+
+            fprintf(source, "    xdr_iovec_set_len(&iov, len);\n");
+            fprintf(source, "    evpl_iovec_commit(evpl, 0, &iov, 1);\n");
+
+            fprintf(source, "    evpl_rpc2_call(evpl, program, conn, %d, "
+                    "msg_iov, msg_niov, len, conn->rdma && ddp ? &rdma_chunk : NULL, max_rdma_write_chunk, max_rdma_reply_chunk, callback, callback_private_data);\n",
+                    functionp->id);
+        } else {
+
+            /* Void argument case */
+            fprintf(source, "    int niov;\n");
+            fprintf(source, "    niov = evpl_iovec_alloc(evpl, program->reserve, 8, 1, &iov);\n");
+
+            fprintf(source, "    evpl_rpc2_call(evpl, program, conn, %d, "
+                    "&iov, 1, program->reserve,NULL, max_rdma_write_chunk, max_rdma_reply_chunk, callback, callback_private_data);\n",
+                    functionp->id);
         }
 
         fprintf(source, "}\n\n");
-    }
+    } /* emit_program */
 
     fprintf(source, "void %s_init(struct %s *prog)\n", version->name, version->
             name);
@@ -865,11 +1173,15 @@ emit_program(
     fprintf(source, "    prog->rpc2.procs = %s_%s_procs;\n", program->name,
             version->name);
     fprintf(source, "    prog->rpc2.program_data = prog;\n");
-    fprintf(source, "    prog->rpc2.call_dispatch = call_dispatch_%s;\n",
+    fprintf(source, "    prog->rpc2.recv_call_dispatch = call_dispatch_%s;\n",
+            version->name);
+    fprintf(source, "    prog->rpc2.recv_reply_dispatch = reply_dispatch_%s;\n",
             version->name);
 
     for (functionp = version->functions; functionp != NULL; functionp =
              functionp->next) {
+        fprintf(source, "    prog->send_call_%s = send_call_%s;\n",
+                functionp->name, functionp->name);
         fprintf(source, "    prog->send_reply_%s = send_reply_%s;\n",
                 functionp->name, functionp->name);
     }
@@ -965,11 +1277,11 @@ emit_wrappers(
     fprintf(source, "    xdr_iovec *iov_in,\n");
     fprintf(source, "    xdr_iovec *iov_out,\n");
     fprintf(source, "    int *niov_out,\n");
-    fprintf(source, "    struct evpl_rpc2_rdma_chunk *write_chunk,\n");
+    fprintf(source, "    struct evpl_rpc2_rdma_chunk *rdma_chunk,\n");
     fprintf(source, "    int out_offset) {\n");
     fprintf(source, "    struct xdr_write_cursor cursor;\n");
     fprintf(source,
-            "    xdr_write_cursor_init(&cursor, iov_in, iov_out, *niov_out, write_chunk, out_offset);\n");
+            "    xdr_write_cursor_init(&cursor, iov_in, iov_out, *niov_out, rdma_chunk, out_offset);\n");
     fprintf(source, "    __marshall_%s(out, &cursor);\n", name);
     fprintf(source, "    xdr_write_cursor_flush(&cursor);\n");
     fprintf(source, "    *niov_out = cursor.niov;\n");
@@ -981,12 +1293,16 @@ emit_wrappers(
     fprintf(source, "    struct %s *out,\n", name);
     fprintf(source, "    const xdr_iovec *iov,\n");
     fprintf(source, "    int niov,\n");
-    fprintf(source, "    struct evpl_rpc2_rdma_chunk *read_chunk,\n");
+    fprintf(source, "    struct evpl_rpc2_rdma_chunk *rdma_chunk,\n");
     fprintf(source, "    xdr_dbuf *dbuf) {\n");
     fprintf(source, "    struct xdr_read_cursor cursor;\n");
-    fprintf(source, "    xdr_read_cursor_init(&cursor, iov, niov, read_chunk);\n");
-    fprintf(source, "    return __unmarshall_%s(out, &cursor, dbuf);\n", name
-            );
+    fprintf(source, "    if (niov == 1) {\n");
+    fprintf(source, "        xdr_read_cursor_contig_init(&cursor, iov, rdma_chunk);\n");
+    fprintf(source, "        return __unmarshall_%s_contig(out, &cursor, dbuf);\n", name);
+    fprintf(source, "    } else {\n");
+    fprintf(source, "        xdr_read_cursor_vector_init(&cursor, iov, niov, rdma_chunk);\n");
+    fprintf(source, "        return __unmarshall_%s_vector(out, &cursor, dbuf);\n", name);
+    fprintf(source, "    }\n");
     fprintf(source, "}\n\n");
 } /* emit_wrappers */
 
@@ -1403,7 +1719,7 @@ main(
     DL_FOREACH(xdr_structs, xdr_structp)
     {
 
-        fprintf(source, "static void\n");
+        fprintf(source, "static FORCE_INLINE void\n");
         fprintf(source, "__marshall_%s(\n", xdr_structp->name);
         fprintf(source, "    const struct %s *in,\n", xdr_structp->name);
         fprintf(source, "    struct xdr_write_cursor *cursor) {\n");
@@ -1421,8 +1737,8 @@ main(
 
         fprintf(source, "}\n\n");
 
-        fprintf(source, "static int\n");
-        fprintf(source, "__unmarshall_%s(\n", xdr_structp->name);
+        fprintf(source, "static FORCE_INLINE int\n");
+        fprintf(source, "__unmarshall_%s_vector(\n", xdr_structp->name);
         fprintf(source, "    struct %s *out,\n", xdr_structp->name);
         fprintf(source, "    struct xdr_read_cursor *cursor,\n");
         fprintf(source, "    xdr_dbuf *dbuf) {\n");
@@ -1442,6 +1758,27 @@ main(
         fprintf(source, "    return len;\n");
         fprintf(source, "}\n\n");
 
+        fprintf(source, "static FORCE_INLINE int\n");
+        fprintf(source, "__unmarshall_%s_contig(\n", xdr_structp->name);
+        fprintf(source, "    struct %s *out,\n", xdr_structp->name);
+        fprintf(source, "    struct xdr_read_cursor *cursor,\n");
+        fprintf(source, "    xdr_dbuf *dbuf) {\n");
+        fprintf(source, "    int rc, len = 0;\n");
+
+        DL_FOREACH(xdr_structp->members, xdr_struct_memberp)
+        {
+
+            if (xdr_structp->linkedlist &&
+                strncmp(xdr_struct_memberp->name, "next", 4) == 0) {
+                continue;
+            }
+
+            emit_unmarshall_contig(source, xdr_struct_memberp->name, xdr_struct_memberp
+                                   ->type);
+        }
+        fprintf(source, "    return len;\n");
+        fprintf(source, "}\n\n");
+
         emit_wrappers(source, xdr_structp->name);
 
         emit_dump_struct(source, xdr_structp->name, xdr_structp);
@@ -1450,7 +1787,7 @@ main(
 
     DL_FOREACH(xdr_unions, xdr_unionp)
     {
-        fprintf(source, "static void\n");
+        fprintf(source, "static FORCE_INLINE void\n");
         fprintf(source, "__marshall_%s(\n", xdr_unionp->name);
         fprintf(source, "    const struct %s *in,\n", xdr_unionp->name);
         fprintf(source, "    struct xdr_write_cursor *cursor) {\n");
@@ -1491,8 +1828,8 @@ main(
         fprintf(source, "    ;\n");
         fprintf(source, "}\n\n");
 
-        fprintf(source, "static int\n");
-        fprintf(source, "__unmarshall_%s(\n", xdr_unionp->name);
+        fprintf(source, "static FORCE_INLINE int\n");
+        fprintf(source, "__unmarshall_%s_vector(\n", xdr_unionp->name);
         fprintf(source, "    struct %s *out,\n", xdr_unionp->name);
         fprintf(source, "    struct xdr_read_cursor *cursor,\n");
         fprintf(source, "    xdr_dbuf *dbuf) {\n");
@@ -1520,9 +1857,59 @@ main(
         {
             if (strcmp(xdr_union_casep->label, "default") == 0) {
                 fprintf(source, "    default:\n");
-                fprintf(source, "        break;\n");
+                if (xdr_union_casep->voided) {
+                    fprintf(source, "        break;\n");
+                } else if (xdr_union_casep->type) {
+                    emit_unmarshall(source, xdr_union_casep->name, xdr_union_casep
+                                    ->type);
+                    fprintf(source, "        break;\n");
+                }
             }
         }
+
+        fprintf(source, "    }\n");
+        fprintf(source, "    return len;\n");
+        fprintf(source, "}\n\n");
+
+        fprintf(source, "static FORCE_INLINE int\n");
+        fprintf(source, "__unmarshall_%s_contig(\n", xdr_unionp->name);
+        fprintf(source, "    struct %s *out,\n", xdr_unionp->name);
+        fprintf(source, "    struct xdr_read_cursor *cursor,\n");
+        fprintf(source, "    xdr_dbuf *dbuf) {\n");
+        fprintf(source, "    int rc, len = 0;\n");
+
+        emit_unmarshall_contig(source, xdr_unionp->pivot_name, xdr_unionp->pivot_type);
+
+        fprintf(source, "    switch (out->%s) {\n", xdr_unionp->pivot_name);
+
+        DL_FOREACH(xdr_unionp->cases, xdr_union_casep)
+        {
+            if (strcmp(xdr_union_casep->label, "default") != 0) {
+                fprintf(source, "    case %s:\n", xdr_union_casep->label);
+                if (xdr_union_casep->voided) {
+                    fprintf(source, "        break;\n");
+                } else if (xdr_union_casep->type) {
+                    emit_unmarshall_contig(source, xdr_union_casep->name,
+                                           xdr_union_casep->type);
+                    fprintf(source, "        break;\n");
+                }
+            }
+        }
+
+        DL_FOREACH(xdr_unionp->cases, xdr_union_casep)
+        {
+            if (strcmp(xdr_union_casep->label, "default") == 0) {
+                fprintf(source, "    default:\n");
+                if (xdr_union_casep->voided) {
+                    fprintf(source, "        break;\n");
+                } else if (xdr_union_casep->type) {
+                    emit_unmarshall_contig(source, xdr_union_casep->name, xdr_union_casep
+                                           ->type);
+                    fprintf(source, "        break;\n");
+                }
+            }
+        }
+
         fprintf(source, "    }\n");
         fprintf(source, "    return len;\n");
         fprintf(source, "}\n\n");
