@@ -199,20 +199,20 @@ emit_unmarshall(
     if (type->opaque) {
         if (type->array) {
             fprintf(output,
-                    "    rc = xdr_read_cursor_extract(cursor, out->%s, %s);\n",
+                    "    rc = xdr_read_cursor_vector_extract(cursor, out->%s, %s);\n",
                     name, type->array_size);
         } else if (type->zerocopy) {
             fprintf(output,
-                    "    rc = __unmarshall_opaque_zerocopy(&out->%s, cursor, dbuf);\n",
+                    "    rc = __unmarshall_opaque_zerocopy_vector(&out->%s, cursor, dbuf);\n",
                     name);
         } else {
             fprintf(output,
-                    "    rc = __unmarshall_opaque(&out->%s, %s, cursor, dbuf);\n",
+                    "    rc = __unmarshall_opaque_vector(&out->%s, %s, cursor, dbuf);\n",
                     name, type->vector_bound ? type->vector_bound : "0");
         }
     } else if (strcmp(type->name, "xdr_string") == 0) {
         fprintf(output,
-                "    rc = __unmarshall_%s(&out->%s, cursor, dbuf);\n",
+                "    rc = __unmarshall_%s_vector(&out->%s, cursor, dbuf);\n",
                 type->name, name);
     } else if (type->linkedlist) {
 
@@ -228,7 +228,7 @@ emit_unmarshall(
         fprintf(output, "    {\n");
         fprintf(output, "            uint32_t more;\n");
         fprintf(output,
-                "        rc = __unmarshall_uint32_t(&more, cursor, dbuf);\n")
+                "        rc = __unmarshall_uint32_t_vector(&more, cursor, dbuf);\n")
         ;
         fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "        len += rc;\n");
@@ -238,7 +238,7 @@ emit_unmarshall(
         fprintf(output, "        while (more) {\n");
         fprintf(output, "          xdr_dbuf_alloc_space(current, sizeof(*current), dbuf);\n");
         fprintf(output,
-                "        rc = __unmarshall_%s(current, cursor, dbuf);\n",
+                "        rc = __unmarshall_%s_vector(current, cursor, dbuf);\n",
                 type->name);
         fprintf(output, "         if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "         len += rc;\n");
@@ -249,7 +249,7 @@ emit_unmarshall(
         fprintf(output, "        }\n");
         fprintf(output, "         last = current;\n");
         fprintf(output, "        last->%s = NULL;\n", liststruct->nextmember);
-        fprintf(output, "         rc = __unmarshall_uint32_t(&more, cursor, dbuf);\n");
+        fprintf(output, "         rc = __unmarshall_uint32_t_vector(&more, cursor, dbuf);\n");
         fprintf(output, "         if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "         len += rc;\n");
         fprintf(output, "        }\n");
@@ -259,7 +259,7 @@ emit_unmarshall(
         fprintf(output, "    {\n");
         fprintf(output, "        uint32_t more;\n");
         fprintf(output,
-                "        rc = __unmarshall_uint32_t(&more, cursor, dbuf);\n")
+                "        rc = __unmarshall_uint32_t_vector(&more, cursor, dbuf);\n")
         ;
         fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "        len += rc;\n");
@@ -267,7 +267,7 @@ emit_unmarshall(
         fprintf(output, "        if (more) {\n");
         fprintf(output, "         xdr_dbuf_alloc_space(out->%s, sizeof(*out->%s), dbuf);\n", name, name);
         fprintf(output,
-                "        rc = __unmarshall_%s(out->%s, cursor, dbuf);\n",
+                "        rc = __unmarshall_%s_vector(out->%s, cursor, dbuf);\n",
                 type->name, name);
         fprintf(output, "        } else {\n");
         fprintf(output, "            out->%s = NULL;\n", name);
@@ -275,7 +275,7 @@ emit_unmarshall(
         fprintf(output, "    }\n");
     } else if (type->vector) {
         fprintf(output,
-                "    rc = __unmarshall_uint32_t(&out->num_%s, cursor, dbuf);\n",
+                "    rc = __unmarshall_uint32_t_vector(&out->num_%s, cursor, dbuf);\n",
                 name);
         fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "    len += rc;\n");
@@ -283,7 +283,7 @@ emit_unmarshall(
                 name, name);
         fprintf(output, "    for (int i = 0; i < out->num_%s; i++) {\n", name);
         fprintf(output,
-                "    rc = __unmarshall_%s(&out->%s[i], cursor, dbuf);\n",
+                "    rc = __unmarshall_%s_vector(&out->%s[i], cursor, dbuf);\n",
                 type->name, name);
         fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "        len += rc;\n");
@@ -293,7 +293,7 @@ emit_unmarshall(
         fprintf(output, "    for (int i = 0; i < %s; i++) {\n",
                 type->array_size);
         fprintf(output,
-                "    rc = __unmarshall_%s(&out->%s[i], cursor, dbuf);\n",
+                "    rc = __unmarshall_%s_vector(&out->%s[i], cursor, dbuf);\n",
                 type->name, name);
         fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "        len += rc;\n");
@@ -301,13 +301,144 @@ emit_unmarshall(
         fprintf(output, "    rc = 0;\n");
     } else {
         fprintf(output,
-                "    rc = __unmarshall_%s(&out->%s, cursor, dbuf);\n",
+                "    rc = __unmarshall_%s_vector(&out->%s, cursor, dbuf);\n",
                 type->name, name);
     }
 
     fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
     fprintf(output, "    len += rc;\n");
 } /* emit_unmarshall */
+
+void
+emit_unmarshall_contig(
+    FILE            *output,
+    const char      *name,
+    struct xdr_type *type)
+{
+    struct xdr_identifier *chk;
+    struct xdr_struct     *liststruct;
+
+    if (type->opaque) {
+        if (type->array) {
+            fprintf(output,
+                    "    memcpy(out->%s, xdr_iovec_data(cursor->cur) + cursor->iov_offset, %s);\n",
+                    name, type->array_size);
+            fprintf(output, "    cursor->iov_offset += %s;\n", type->array_size);
+            fprintf(output, "    cursor->offset += %s;\n", type->array_size);
+            fprintf(output, "    len += %s;\n", type->array_size);
+            fprintf(output, "    rc = 0;\n");
+        } else if (type->zerocopy) {
+            fprintf(output,
+                    "    rc = __unmarshall_opaque_zerocopy_contig(&out->%s, cursor, dbuf);\n",
+                    name);
+            fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
+        } else {
+            fprintf(output,
+                    "    rc = __unmarshall_opaque_contig(&out->%s, %s, cursor, dbuf);\n",
+                    name, type->vector_bound ? type->vector_bound : "0");
+            fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
+        }
+    } else if (strcmp(type->name, "xdr_string") == 0) {
+        fprintf(output,
+                "    rc = __unmarshall_%s_contig(&out->%s, cursor, dbuf);\n",
+                type->name, name);
+        fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
+    } else if (type->linkedlist) {
+
+        HASH_FIND_STR(xdr_identifiers, type->name, chk);
+
+        if (!chk) {
+            fprintf(stderr, "Linked list '%s' not found.\n", type->name);
+            exit(1);
+        }
+
+        liststruct = (struct xdr_struct *) chk->ptr;
+
+        fprintf(output, "    {\n");
+        fprintf(output, "            uint32_t more;\n");
+        fprintf(output,
+                "        rc = __unmarshall_uint32_t_contig(&more, cursor, dbuf);\n")
+        ;
+        fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "        len += rc;\n");
+
+        fprintf(output, "        out->%s = NULL;\n", name);
+        fprintf(output, "        struct %s *current = NULL, *last = NULL;\n", type->name);
+        fprintf(output, "        while (more) {\n");
+        fprintf(output, "          xdr_dbuf_alloc_space(current, sizeof(*current), dbuf);\n");
+        fprintf(output,
+                "        rc = __unmarshall_%s_contig(current, cursor, dbuf);\n",
+                type->name);
+        fprintf(output, "         if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "         len += rc;\n");
+        fprintf(output, "         if (last) {\n");
+        fprintf(output, "             last->%s = current;\n", liststruct->nextmember);
+        fprintf(output, "         } else {\n");
+        fprintf(output, "             out->%s = current;\n", name);
+        fprintf(output, "        }\n");
+        fprintf(output, "         last = current;\n");
+        fprintf(output, "        last->%s = NULL;\n", liststruct->nextmember);
+        fprintf(output, "         rc = __unmarshall_uint32_t_contig(&more, cursor, dbuf);\n");
+        fprintf(output, "         if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "         len += rc;\n");
+        fprintf(output, "        }\n");
+        fprintf(output, "        rc = 0;\n");
+        fprintf(output, "    }\n");
+    } else if (type->optional) {
+        fprintf(output, "    {\n");
+        fprintf(output, "        uint32_t more;\n");
+        fprintf(output,
+                "        rc = __unmarshall_uint32_t_contig(&more, cursor, dbuf);\n")
+        ;
+        fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "        len += rc;\n");
+        fprintf(output, "        rc = 0;\n");
+        fprintf(output, "        if (more) {\n");
+        fprintf(output, "         xdr_dbuf_alloc_space(out->%s, sizeof(*out->%s), dbuf);\n", name, name);
+        fprintf(output,
+                "        rc = __unmarshall_%s_contig(out->%s, cursor, dbuf);\n",
+                type->name, name);
+        fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "        len += rc;\n");
+        fprintf(output, "        } else {\n");
+        fprintf(output, "            out->%s = NULL;\n", name);
+        fprintf(output, "        };\n");
+        fprintf(output, "    }\n");
+    } else if (type->vector) {
+        fprintf(output,
+                "    rc = __unmarshall_uint32_t_contig(&out->num_%s, cursor, dbuf);\n",
+                name);
+        fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "    len += rc;\n");
+        fprintf(output, "     xdr_dbuf_reserve(out, %s, out->num_%s, dbuf);\n",
+                name, name);
+        fprintf(output, "    for (int i = 0; i < out->num_%s; i++) {\n", name);
+        fprintf(output,
+                "    rc = __unmarshall_%s_contig(&out->%s[i], cursor, dbuf);\n",
+                type->name, name);
+        fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "        len += rc;\n");
+        fprintf(output, "    }\n");
+        fprintf(output, "    rc = 0;\n");
+    } else if (type->array) {
+        fprintf(output, "    for (int i = 0; i < %s; i++) {\n",
+                type->array_size);
+        fprintf(output,
+                "    rc = __unmarshall_%s_contig(&out->%s[i], cursor, dbuf);\n",
+                type->name, name);
+        fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
+        fprintf(output, "        len += rc;\n");
+        fprintf(output, "    }\n");
+        fprintf(output, "    rc = 0;\n");
+    } else {
+        fprintf(output,
+                "    rc = __unmarshall_%s_contig(&out->%s, cursor, dbuf);\n",
+                type->name, name);
+        fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
+    }
+
+    fprintf(output, "    len += rc;\n");
+} /* emit_unmarshall_contig */
 
 void
 emit_internal_headers(
@@ -321,7 +452,13 @@ emit_internal_headers(
     fprintf(source, "    struct xdr_write_cursor *cursor);\n\n");
 
     fprintf(source, "static int\n");
-    fprintf(source, "__unmarshall_%s(\n", name);
+    fprintf(source, "__unmarshall_%s_vector(\n", name);
+    fprintf(source, "    struct %s *out,\n", name);
+    fprintf(source, "    struct xdr_read_cursor *cursor,\n");
+    fprintf(source, "    xdr_dbuf *dbuf);\n\n");
+
+    fprintf(source, "static int\n");
+    fprintf(source, "__unmarshall_%s_contig(\n", name);
     fprintf(source, "    struct %s *out,\n", name);
     fprintf(source, "    struct xdr_read_cursor *cursor,\n");
     fprintf(source, "    xdr_dbuf *dbuf);\n\n");
@@ -1159,9 +1296,13 @@ emit_wrappers(
     fprintf(source, "    struct evpl_rpc2_rdma_chunk *rdma_chunk,\n");
     fprintf(source, "    xdr_dbuf *dbuf) {\n");
     fprintf(source, "    struct xdr_read_cursor cursor;\n");
-    fprintf(source, "    xdr_read_cursor_init(&cursor, iov, niov, rdma_chunk);\n");
-    fprintf(source, "    return __unmarshall_%s(out, &cursor, dbuf);\n", name
-            );
+    fprintf(source, "    if (niov == 1) {\n");
+    fprintf(source, "        xdr_read_cursor_contig_init(&cursor, iov, rdma_chunk);\n");
+    fprintf(source, "        return __unmarshall_%s_contig(out, &cursor, dbuf);\n", name);
+    fprintf(source, "    } else {\n");
+    fprintf(source, "        xdr_read_cursor_vector_init(&cursor, iov, niov, rdma_chunk);\n");
+    fprintf(source, "        return __unmarshall_%s_vector(out, &cursor, dbuf);\n", name);
+    fprintf(source, "    }\n");
     fprintf(source, "}\n\n");
 } /* emit_wrappers */
 
@@ -1597,7 +1738,7 @@ main(
         fprintf(source, "}\n\n");
 
         fprintf(source, "static FORCE_INLINE int\n");
-        fprintf(source, "__unmarshall_%s(\n", xdr_structp->name);
+        fprintf(source, "__unmarshall_%s_vector(\n", xdr_structp->name);
         fprintf(source, "    struct %s *out,\n", xdr_structp->name);
         fprintf(source, "    struct xdr_read_cursor *cursor,\n");
         fprintf(source, "    xdr_dbuf *dbuf) {\n");
@@ -1613,6 +1754,27 @@ main(
 
             emit_unmarshall(source, xdr_struct_memberp->name, xdr_struct_memberp
                             ->type);
+        }
+        fprintf(source, "    return len;\n");
+        fprintf(source, "}\n\n");
+
+        fprintf(source, "static FORCE_INLINE int\n");
+        fprintf(source, "__unmarshall_%s_contig(\n", xdr_structp->name);
+        fprintf(source, "    struct %s *out,\n", xdr_structp->name);
+        fprintf(source, "    struct xdr_read_cursor *cursor,\n");
+        fprintf(source, "    xdr_dbuf *dbuf) {\n");
+        fprintf(source, "    int rc, len = 0;\n");
+
+        DL_FOREACH(xdr_structp->members, xdr_struct_memberp)
+        {
+
+            if (xdr_structp->linkedlist &&
+                strncmp(xdr_struct_memberp->name, "next", 4) == 0) {
+                continue;
+            }
+
+            emit_unmarshall_contig(source, xdr_struct_memberp->name, xdr_struct_memberp
+                                   ->type);
         }
         fprintf(source, "    return len;\n");
         fprintf(source, "}\n\n");
@@ -1667,7 +1829,7 @@ main(
         fprintf(source, "}\n\n");
 
         fprintf(source, "static FORCE_INLINE int\n");
-        fprintf(source, "__unmarshall_%s(\n", xdr_unionp->name);
+        fprintf(source, "__unmarshall_%s_vector(\n", xdr_unionp->name);
         fprintf(source, "    struct %s *out,\n", xdr_unionp->name);
         fprintf(source, "    struct xdr_read_cursor *cursor,\n");
         fprintf(source, "    xdr_dbuf *dbuf) {\n");
@@ -1700,6 +1862,49 @@ main(
                 } else if (xdr_union_casep->type) {
                     emit_unmarshall(source, xdr_union_casep->name, xdr_union_casep
                                     ->type);
+                    fprintf(source, "        break;\n");
+                }
+            }
+        }
+
+        fprintf(source, "    }\n");
+        fprintf(source, "    return len;\n");
+        fprintf(source, "}\n\n");
+
+        fprintf(source, "static FORCE_INLINE int\n");
+        fprintf(source, "__unmarshall_%s_contig(\n", xdr_unionp->name);
+        fprintf(source, "    struct %s *out,\n", xdr_unionp->name);
+        fprintf(source, "    struct xdr_read_cursor *cursor,\n");
+        fprintf(source, "    xdr_dbuf *dbuf) {\n");
+        fprintf(source, "    int rc, len = 0;\n");
+
+        emit_unmarshall_contig(source, xdr_unionp->pivot_name, xdr_unionp->pivot_type);
+
+        fprintf(source, "    switch (out->%s) {\n", xdr_unionp->pivot_name);
+
+        DL_FOREACH(xdr_unionp->cases, xdr_union_casep)
+        {
+            if (strcmp(xdr_union_casep->label, "default") != 0) {
+                fprintf(source, "    case %s:\n", xdr_union_casep->label);
+                if (xdr_union_casep->voided) {
+                    fprintf(source, "        break;\n");
+                } else if (xdr_union_casep->type) {
+                    emit_unmarshall_contig(source, xdr_union_casep->name,
+                                           xdr_union_casep->type);
+                    fprintf(source, "        break;\n");
+                }
+            }
+        }
+
+        DL_FOREACH(xdr_unionp->cases, xdr_union_casep)
+        {
+            if (strcmp(xdr_union_casep->label, "default") == 0) {
+                fprintf(source, "    default:\n");
+                if (xdr_union_casep->voided) {
+                    fprintf(source, "        break;\n");
+                } else if (xdr_union_casep->type) {
+                    emit_unmarshall_contig(source, xdr_union_casep->name, xdr_union_casep
+                                           ->type);
                     fprintf(source, "        break;\n");
                 }
             }
