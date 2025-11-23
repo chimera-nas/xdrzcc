@@ -440,6 +440,81 @@ emit_unmarshall_contig(
     fprintf(output, "    len += rc;\n");
 } /* emit_unmarshall_contig */
 
+static int
+is_type_recursive(const char *type_name)
+{
+    struct xdr_identifier    *chk;
+    struct xdr_struct        *xdr_structp;
+    struct xdr_union         *xdr_unionp;
+    struct xdr_struct_member *xdr_struct_memberp;
+    struct xdr_union_case    *xdr_union_casep;
+    struct xdr_type          *member_type;
+    struct xdr_identifier    *member_chk;
+
+    HASH_FIND_STR(xdr_identifiers, type_name, chk);
+    if (!chk) {
+        return 0;
+    }
+
+    if (chk->type == XDR_STRUCT) {
+        xdr_structp = (struct xdr_struct *) chk->ptr;
+
+        DL_FOREACH(xdr_structp->members, xdr_struct_memberp)
+        {
+            member_type = xdr_struct_memberp->type;
+
+            if (member_type->builtin) {
+                continue;
+            }
+
+            HASH_FIND_STR(xdr_identifiers, member_type->name, member_chk);
+            if (member_chk && member_chk->type == XDR_TYPEDEF) {
+                struct xdr_typedef *xdr_typedefp = (struct xdr_typedef *) member_chk->ptr;
+                if (!xdr_typedefp->type->builtin && strcmp(xdr_typedefp->type->name, type_name) == 0) {
+                    return 1;
+                }
+            } else if (strcmp(member_type->name, type_name) == 0) {
+                return 1;
+            }
+        }
+    } else if (chk->type == XDR_UNION) {
+        xdr_unionp = (struct xdr_union *) chk->ptr;
+
+        if (!xdr_unionp->pivot_type->builtin) {
+            HASH_FIND_STR(xdr_identifiers, xdr_unionp->pivot_type->name, member_chk);
+            if (member_chk && member_chk->type == XDR_TYPEDEF) {
+                struct xdr_typedef *xdr_typedefp = (struct xdr_typedef *) member_chk->ptr;
+                if (!xdr_typedefp->type->builtin && strcmp(xdr_typedefp->type->name, type_name) == 0) {
+                    return 1;
+                }
+            } else if (strcmp(xdr_unionp->pivot_type->name, type_name) == 0) {
+                return 1;
+            }
+        }
+
+        DL_FOREACH(xdr_unionp->cases, xdr_union_casep)
+        {
+            if (!xdr_union_casep->type || xdr_union_casep->type->builtin) {
+                continue;
+            }
+
+            member_type = xdr_union_casep->type;
+
+            HASH_FIND_STR(xdr_identifiers, member_type->name, member_chk);
+            if (member_chk && member_chk->type == XDR_TYPEDEF) {
+                struct xdr_typedef *xdr_typedefp = (struct xdr_typedef *) member_chk->ptr;
+                if (!xdr_typedefp->type->builtin && strcmp(xdr_typedefp->type->name, type_name) == 0) {
+                    return 1;
+                }
+            } else if (strcmp(member_type->name, type_name) == 0) {
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+} /* is_type_recursive */
+
 void
 emit_internal_headers(
     FILE       *source,
@@ -1718,8 +1793,13 @@ main(
 
     DL_FOREACH(xdr_structs, xdr_structp)
     {
+        int is_recursive = is_type_recursive(xdr_structp->name);
 
-        fprintf(source, "static FORCE_INLINE void\n");
+        if (is_recursive) {
+            fprintf(source, "static void\n");
+        } else {
+            fprintf(source, "static FORCE_INLINE void\n");
+        }
         fprintf(source, "__marshall_%s(\n", xdr_structp->name);
         fprintf(source, "    const struct %s *in,\n", xdr_structp->name);
         fprintf(source, "    struct xdr_write_cursor *cursor) {\n");
@@ -1737,7 +1817,11 @@ main(
 
         fprintf(source, "}\n\n");
 
-        fprintf(source, "static FORCE_INLINE int\n");
+        if (is_recursive) {
+            fprintf(source, "static int\n");
+        } else {
+            fprintf(source, "static FORCE_INLINE int\n");
+        }
         fprintf(source, "__unmarshall_%s_vector(\n", xdr_structp->name);
         fprintf(source, "    struct %s *out,\n", xdr_structp->name);
         fprintf(source, "    struct xdr_read_cursor *cursor,\n");
@@ -1758,7 +1842,11 @@ main(
         fprintf(source, "    return len;\n");
         fprintf(source, "}\n\n");
 
-        fprintf(source, "static FORCE_INLINE int\n");
+        if (is_recursive) {
+            fprintf(source, "static int\n");
+        } else {
+            fprintf(source, "static FORCE_INLINE int\n");
+        }
         fprintf(source, "__unmarshall_%s_contig(\n", xdr_structp->name);
         fprintf(source, "    struct %s *out,\n", xdr_structp->name);
         fprintf(source, "    struct xdr_read_cursor *cursor,\n");
@@ -1787,7 +1875,13 @@ main(
 
     DL_FOREACH(xdr_unions, xdr_unionp)
     {
-        fprintf(source, "static FORCE_INLINE void\n");
+        int is_recursive = is_type_recursive(xdr_unionp->name);
+
+        if (is_recursive) {
+            fprintf(source, "static void\n");
+        } else {
+            fprintf(source, "static FORCE_INLINE void\n");
+        }
         fprintf(source, "__marshall_%s(\n", xdr_unionp->name);
         fprintf(source, "    const struct %s *in,\n", xdr_unionp->name);
         fprintf(source, "    struct xdr_write_cursor *cursor) {\n");
@@ -1828,7 +1922,11 @@ main(
         fprintf(source, "    ;\n");
         fprintf(source, "}\n\n");
 
-        fprintf(source, "static FORCE_INLINE int\n");
+        if (is_recursive) {
+            fprintf(source, "static int\n");
+        } else {
+            fprintf(source, "static FORCE_INLINE int\n");
+        }
         fprintf(source, "__unmarshall_%s_vector(\n", xdr_unionp->name);
         fprintf(source, "    struct %s *out,\n", xdr_unionp->name);
         fprintf(source, "    struct xdr_read_cursor *cursor,\n");
@@ -1871,7 +1969,11 @@ main(
         fprintf(source, "    return len;\n");
         fprintf(source, "}\n\n");
 
-        fprintf(source, "static FORCE_INLINE int\n");
+        if (is_recursive) {
+            fprintf(source, "static int\n");
+        } else {
+            fprintf(source, "static FORCE_INLINE int\n");
+        }
         fprintf(source, "__unmarshall_%s_contig(\n", xdr_unionp->name);
         fprintf(source, "    struct %s *out,\n", xdr_unionp->name);
         fprintf(source, "    struct xdr_read_cursor *cursor,\n");
