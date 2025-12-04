@@ -191,6 +191,10 @@ xdr_read_cursor_vector_extract(
     left = bytes;
 
     while (left) {
+        if (unlikely(cursor->cur > cursor->last)) {
+            return -1;
+        }
+
         chunk = xdr_iovec_len(cursor->cur) - cursor->iov_offset;
         if (left < chunk) {
             chunk = left;
@@ -359,6 +363,10 @@ __unmarshall_uint32_t_contig(
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
+    if (unlikely(cursor->iov_offset + 4 > xdr_iovec_len(cursor->cur))) {
+        return -1;
+    }
+
     *v                  = xdr_ntoh32(*(const uint32_t *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset));
     cursor->iov_offset += 4;
     cursor->offset     += 4;
@@ -400,12 +408,16 @@ __unmarshall_int32_t_vector(
     return 4;
 } /* __unmarshall_int32_t_vector */
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_int32_t_contig(
     int32_t                *v,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
+    if (unlikely(cursor->iov_offset + 4 > xdr_iovec_len(cursor->cur))) {
+        return -1;
+    }
+
     *v                  = xdr_ntoh32(*(const int32_t *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset));
     cursor->iov_offset += 4;
     cursor->offset     += 4;
@@ -447,12 +459,16 @@ __unmarshall_uint64_t_vector(
     return 8;
 } /* __unmarshall_uint64_t_vector */
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_uint64_t_contig(
     uint64_t               *v,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
+    if (unlikely(cursor->iov_offset + 8 > xdr_iovec_len(cursor->cur))) {
+        return -1;
+    }
+
     *v                  = xdr_ntoh64(*(const uint64_t *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset));
     cursor->iov_offset += 8;
     cursor->offset     += 8;
@@ -494,12 +510,16 @@ __unmarshall_int64_t_vector(
     return 8;
 } /* __unmarshall_int64_t_vector */
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_int64_t_contig(
     int64_t                *v,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
+    if (unlikely(cursor->iov_offset + 8 > xdr_iovec_len(cursor->cur))) {
+        return -1;
+    }
+
     *v                  = xdr_ntoh64(*(const int64_t *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset));
     cursor->iov_offset += 8;
     cursor->offset     += 8;
@@ -529,6 +549,10 @@ __unmarshall_float_contig(
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
+    if (unlikely(cursor->iov_offset + 4 > xdr_iovec_len(cursor->cur))) {
+        return -1;
+    }
+
     *v                  = *(const float *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset);
     cursor->iov_offset += 4;
     cursor->offset     += 4;
@@ -558,6 +582,10 @@ __unmarshall_double_contig(
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
+    if (unlikely(cursor->iov_offset + 8 > xdr_iovec_len(cursor->cur))) {
+        return -1;
+    }
+
     *v                  = *(const double *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset);
     cursor->iov_offset += 8;
     cursor->offset     += 8;
@@ -665,12 +693,16 @@ __unmarshall_xdr_string_contig(
     }
     len += rc;
 
+    pad = (4 - (str->len & 0x3)) & 0x3;
+    if (unlikely(cursor->iov_offset + str->len + pad > xdr_iovec_len(cursor->cur))) {
+        return -1;
+    }
+
     str->str            = (char *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset);
     cursor->iov_offset += str->len;
     cursor->offset     += str->len;
     len                += str->len;
 
-    pad = (4 - (str->len & 0x3)) & 0x3;
     if (pad) {
         cursor->iov_offset += pad;
         cursor->offset     += pad;
@@ -702,6 +734,9 @@ __unmarshall_opaque_fixed_vector(
     v->niov   = 0;
 
     do {
+        if (unlikely(cursor->cur > cursor->last)) {
+            return -1;
+        }
 
         xdr_iovec_set_data(&v->iov[v->niov], xdr_iovec_data(cursor->cur) +
                            cursor->iov_offset);
@@ -744,9 +779,14 @@ __unmarshall_opaque_fixed_contig(
 {
     int pad;
 
+    pad = (4 - (size & 0x3)) & 0x3;
+    if (unlikely(cursor->iov_offset + size + pad > xdr_iovec_len(cursor->cur))) {
+        return -1;
+    }
+
     v->length = size;
     v->niov   = 1;
-    v->iov = xdr_dbuf_alloc_space(sizeof(*v->iov), dbuf);
+    v->iov    = xdr_dbuf_alloc_space(sizeof(*v->iov), dbuf);
     if (unlikely(v->iov == NULL)) {
         return -1;
     }
@@ -758,7 +798,6 @@ __unmarshall_opaque_fixed_contig(
     cursor->iov_offset += size;
     cursor->offset     += size;
 
-    pad = (4 - (size & 0x3)) & 0x3;
     if (pad) {
         cursor->iov_offset += pad;
         cursor->offset     += pad;
@@ -930,12 +969,16 @@ __unmarshall_opaque_contig(
     }
     len += rc;
 
+    pad = (4 - (v->len & 0x3)) & 0x3;
+    if (unlikely(cursor->iov_offset + v->len + pad > xdr_iovec_len(cursor->cur))) {
+        return -1;
+    }
+
     v->data             = (void *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset);
     cursor->iov_offset += v->len;
     cursor->offset     += v->len;
     len                += v->len;
 
-    pad = (4 - (v->len & 0x3)) & 0x3;
     if (pad) {
         cursor->iov_offset += pad;
         cursor->offset     += pad;
