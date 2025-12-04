@@ -777,10 +777,17 @@ emit_length_struct(
     struct xdr_struct *xdr_structp)
 {
     struct xdr_struct_member *member;
+    int                       is_recursive = is_type_recursive(name);
 
-    fprintf(source,
-            "static int __marshall_length_%s(const struct %s *in)\n",
-            name, name);
+    if (is_recursive) {
+        fprintf(source,
+                "static int __marshall_length_%s(const struct %s *in)\n",
+                name, name);
+    } else {
+        fprintf(source,
+                "static FORCE_INLINE int __marshall_length_%s(const struct %s *in)\n",
+                name, name);
+    }
 
     fprintf(source, "{\n");
     fprintf(source, "    uint32_t length = 0;\n");
@@ -854,10 +861,17 @@ emit_length_union(
     struct xdr_union *xdr_unionp)
 {
     struct xdr_union_case *casep;
+    int                    is_recursive = is_type_recursive(name);
 
-    fprintf(source,
-            "static int __marshall_length_%s(const struct %s *in)\n",
-            name, name);
+    if (is_recursive) {
+        fprintf(source,
+                "static int __marshall_length_%s(const struct %s *in)\n",
+                name, name);
+    } else {
+        fprintf(source,
+                "static FORCE_INLINE int __marshall_length_%s(const struct %s *in)\n",
+                name, name);
+    }
     fprintf(source, "{\n");
     fprintf(source, "    uint32_t length = 0;\n");
     emit_length_member(source, xdr_unionp->pivot_name, xdr_unionp->pivot_type);
