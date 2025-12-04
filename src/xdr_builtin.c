@@ -23,7 +23,7 @@
 #define unlikely(x) __builtin_expect(!!(x), 0)
 #define FORCE_INLINE __attribute__((always_inline)) inline
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 xdr_iovec_add_offset(
     xdr_iovec *iov,
     int        offset)
@@ -330,7 +330,7 @@ __marshall_uint32_t(
 
 } /* __marshall_uint32_t */
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_uint32_t_vector(
     uint32_t               *v,
     struct xdr_read_cursor *cursor,
@@ -350,7 +350,7 @@ __unmarshall_uint32_t_vector(
     return 4;
 } /* __unmarshall_uint32_t_vector */
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_uint32_t_contig(
     uint32_t               *v,
     struct xdr_read_cursor *cursor,
@@ -376,7 +376,7 @@ __marshall_int32_t(
     cursor->scratch_used += 4;
 } /* __marshall_int32_t */
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_int32_t_vector(
     int32_t                *v,
     struct xdr_read_cursor *cursor,
@@ -422,7 +422,7 @@ __marshall_uint64_t(
     cursor->scratch_used += 8;
 } /* __marshall_uint64_t */
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_uint64_t_vector(
     uint64_t               *v,
     struct xdr_read_cursor *cursor,
@@ -468,7 +468,7 @@ __marshall_int64_t(
     cursor->scratch_used += 8;
 } /* __marshall_int64_t */
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_int64_t_vector(
     int64_t                *v,
     struct xdr_read_cursor *cursor,
@@ -508,7 +508,7 @@ __marshall_float(
     xdr_write_cursor_append(cursor, v, 4);
 } /* __marshall_float */
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_float_vector(
     float                  *v,
     struct xdr_read_cursor *cursor,
@@ -517,7 +517,7 @@ __unmarshall_float_vector(
     return xdr_read_cursor_vector_extract(cursor, v, 4);
 } /* __unmarshall_float_vector */
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_float_contig(
     float                  *v,
     struct xdr_read_cursor *cursor,
@@ -537,7 +537,7 @@ __marshall_double(
     xdr_write_cursor_append(cursor, v, 8);
 } /* __marshall_double */
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_double_vector(
     double                 *v,
     struct xdr_read_cursor *cursor,
@@ -546,7 +546,7 @@ __unmarshall_double_vector(
     return xdr_read_cursor_vector_extract(cursor, v, 8);
 } /* __unmarshall_double_vector */
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_double_contig(
     double                 *v,
     struct xdr_read_cursor *cursor,
@@ -577,7 +577,7 @@ __marshall_xdr_string(
     }
 } /* __marshall_xdr_string */
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_xdr_string_vector(
     xdr_string             *str,
     struct xdr_read_cursor *cursor,
@@ -630,7 +630,7 @@ __unmarshall_xdr_string_vector(
     return len;
 } /* __unmarshall_xdr_string_vector */
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_xdr_string_contig(
     xdr_string             *str,
     struct xdr_read_cursor *cursor,
@@ -663,7 +663,7 @@ __unmarshall_xdr_string_contig(
 
 
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_opaque_fixed_vector(
     xdr_iovecr             *v,
     uint32_t                size,
@@ -711,7 +711,7 @@ __unmarshall_opaque_fixed_vector(
     return size + pad;
 } /* __unmarshall_opaque_fixed_vector */
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_opaque_fixed_contig(
     xdr_iovecr             *v,
     uint32_t                size,
@@ -815,7 +815,7 @@ __marshall_opaque_zerocopy(
     }
 } /* __marshall_opaque_zerocopy */
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_opaque_vector(
     xdr_opaque             *v,
     uint32_t                bound,
@@ -862,7 +862,7 @@ __unmarshall_opaque_vector(
     return 4 + v->len + pad;
 } /* __unmarshall_opaque_variable_bound_vector */
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_opaque_contig(
     xdr_opaque             *v,
     uint32_t                bound,
@@ -892,7 +892,7 @@ __unmarshall_opaque_contig(
     return len;
 } /* __unmarshall_opaque_contig */
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_opaque_zerocopy_vector(
     xdr_iovecr             *v,
     struct xdr_read_cursor *cursor,
@@ -930,7 +930,7 @@ __unmarshall_opaque_zerocopy_vector(
     return 4 + rc;
 } /* __unmarshall_opaque_variable_vector */
 
-static FORCE_INLINE int
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_opaque_zerocopy_contig(
     xdr_iovecr             *v,
     struct xdr_read_cursor *cursor,

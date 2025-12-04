@@ -932,13 +932,13 @@ emit_program_header(
 
         if (strcmp(functionp->reply_type->name, "void")) {
             fprintf(header,
-                    "   int (*send_reply_%s)(struct evpl *evpl, struct %s *, void *);\n",
+                    "   int WARN_UNUSED_RESULT (*send_reply_%s)(struct evpl *evpl, struct %s *, void *);\n",
                     functionp->name,
                     functionp->reply_type->name);
 
         } else {
             fprintf(header,
-                    "   int (*send_reply_%s)(struct evpl *evpl, void *);\n",
+                    "   int WARN_UNUSED_RESULT (*send_reply_%s)(struct evpl *evpl, void *);\n",
                     functionp->name);
         }
 
@@ -1137,8 +1137,8 @@ emit_program(
             fprintf(source, "{\n");
             fprintf(source, "    struct evpl_rpc2_msg *msg = private_data;\n");
             fprintf(source, "    struct evpl_iovec iov, *msg_iov;\n");
-            fprintf(source, "    int niov, msg_niov = 256,len;\n");
-            fprintf(source, "    xdr_dbuf_alloc_space(msg_iov, sizeof(*msg_iov) * 256, msg->dbuf);\n");
+            fprintf(source, "    int niov, msg_niov = 260,len;\n");
+            fprintf(source, "    xdr_dbuf_alloc_space(msg_iov, sizeof(*msg_iov) * 260, msg->dbuf);\n");
             fprintf(source,
                     "    niov = evpl_iovec_reserve(evpl, 128*1024, 8, 1, &iov);\n");
             fprintf(source, "    if (unlikely(niov != 1)) return 1;\n");
@@ -1198,7 +1198,7 @@ emit_program(
         fprintf(source, "    void *callback_private_data)\n");
         fprintf(source, "{\n");
         fprintf(source, "    struct evpl_iovec iov, *msg_iov;\n");
-        fprintf(source, "    int msg_niov = 256, len;\n");
+        fprintf(source, "    int msg_niov = 260, len;\n");
         fprintf(source, "    xdr_dbuf *dbuf = (xdr_dbuf *) conn->thread_dbuf;\n");
 
         if (has_args) {
@@ -1207,7 +1207,7 @@ emit_program(
             fprintf(source, "    rdma_chunk.max_length = conn->rdma && ddp ? UINT32_MAX : 0;\n");
             fprintf(source, "    rdma_chunk.niov = 0;\n");
             fprintf(source, "    xdr_dbuf_reset(dbuf);\n");
-            fprintf(source, "    xdr_dbuf_alloc_space(msg_iov, sizeof(*msg_iov) * 256, dbuf);\n");
+            fprintf(source, "    xdr_dbuf_alloc_space(msg_iov, sizeof(*msg_iov) * 260, dbuf);\n");
             fprintf(source, "    evpl_iovec_reserve(evpl, 128*1024, 8, 1, &iov);\n\n");
 
             fprintf(source, "    len = marshall_%s(args, &iov, msg_iov, &msg_niov, "
@@ -1346,7 +1346,7 @@ emit_wrappers(
     FILE       *source,
     const char *name)
 {
-    fprintf(source, "int\n");
+    fprintf(source, "int WARN_UNUSED_RESULT\n");
     fprintf(source, "marshall_%s(\n", name);
     fprintf(source, "    const struct %s *out,\n", name);
     fprintf(source, "    xdr_iovec *iov_in,\n");
@@ -1363,7 +1363,7 @@ emit_wrappers(
     fprintf(source, "    return cursor.total;\n");
     fprintf(source, "}\n\n");
 
-    fprintf(source, "int\n");
+    fprintf(source, "int WARN_UNUSED_RESULT\n");
     fprintf(source, "unmarshall_%s(\n", name);
     fprintf(source, "    struct %s *out,\n", name);
     fprintf(source, "    const xdr_iovec *iov,\n");
@@ -1818,9 +1818,9 @@ main(
         fprintf(source, "}\n\n");
 
         if (is_recursive) {
-            fprintf(source, "static int\n");
+            fprintf(source, "static int WARN_UNUSED_RESULT\n");
         } else {
-            fprintf(source, "static FORCE_INLINE int\n");
+            fprintf(source, "static FORCE_INLINE int WARN_UNUSED_RESULT\n");
         }
         fprintf(source, "__unmarshall_%s_vector(\n", xdr_structp->name);
         fprintf(source, "    struct %s *out,\n", xdr_structp->name);
@@ -1843,9 +1843,9 @@ main(
         fprintf(source, "}\n\n");
 
         if (is_recursive) {
-            fprintf(source, "static int\n");
+            fprintf(source, "static int WARN_UNUSED_RESULT\n");
         } else {
-            fprintf(source, "static FORCE_INLINE int\n");
+            fprintf(source, "static FORCE_INLINE int WARN_UNUSED_RESULT\n");
         }
         fprintf(source, "__unmarshall_%s_contig(\n", xdr_structp->name);
         fprintf(source, "    struct %s *out,\n", xdr_structp->name);
@@ -1923,9 +1923,9 @@ main(
         fprintf(source, "}\n\n");
 
         if (is_recursive) {
-            fprintf(source, "static int\n");
+            fprintf(source, "static int WARN_UNUSED_RESULT\n");
         } else {
-            fprintf(source, "static FORCE_INLINE int\n");
+            fprintf(source, "static FORCE_INLINE int WARN_UNUSED_RESULT\n");
         }
         fprintf(source, "__unmarshall_%s_vector(\n", xdr_unionp->name);
         fprintf(source, "    struct %s *out,\n", xdr_unionp->name);
@@ -1970,9 +1970,9 @@ main(
         fprintf(source, "}\n\n");
 
         if (is_recursive) {
-            fprintf(source, "static int\n");
+            fprintf(source, "static int WARN_UNUSED_RESULT\n");
         } else {
-            fprintf(source, "static FORCE_INLINE int\n");
+            fprintf(source, "static FORCE_INLINE int WARN_UNUSED_RESULT\n");
         }
         fprintf(source, "__unmarshall_%s_contig(\n", xdr_unionp->name);
         fprintf(source, "    struct %s *out,\n", xdr_unionp->name);

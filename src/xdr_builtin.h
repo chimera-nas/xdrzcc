@@ -11,10 +11,14 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
+#ifndef WARN_UNUSED_RESULT
+#define WARN_UNUSED_RESULT __attribute__((warn_unused_result))
+#endif /* ifndef WARN_UNUSED_RESULT */
+
 struct evpl_rpc2_rdma_chunk;
 
 #ifndef XDR_MAX_DBUF
-#define XDR_MAX_DBUF 4096
+#define XDR_MAX_DBUF       4096
 #endif /* ifndef XDR_MAX_DBUF */
 
 typedef struct {
