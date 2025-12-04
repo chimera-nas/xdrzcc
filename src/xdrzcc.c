@@ -113,20 +113,20 @@ emit_marshall(
     if (type->opaque) {
         if (type->array) {
             fprintf(output,
-                    "    xdr_write_cursor_append(cursor, in->%s, %s);\n",
+                    "    if (unlikely(xdr_write_cursor_append(cursor, in->%s, %s) < 0)) return -1;\n",
                     name, type->array_size);
         } else if (type->zerocopy) {
             fprintf(output,
-                    "    __marshall_opaque_zerocopy(&in->%s, cursor);\n",
+                    "    if (unlikely(__marshall_opaque_zerocopy(&in->%s, cursor) < 0)) return -1;\n",
                     name);
         } else {
             fprintf(output,
-                    "    __marshall_opaque(&in->%s, %s, cursor);\n",
+                    "    if (unlikely(__marshall_opaque(&in->%s, %s, cursor) < 0)) return -1;\n",
                     name, type->vector_bound ? type->vector_bound : "0");
         }
     } else if (strcmp(type->name, "xdr_string") == 0) {
         fprintf(output,
-                "    __marshall_xdr_string(&in->%s, cursor);\n",
+                "    if (unlikely(__marshall_xdr_string(&in->%s, cursor) < 0)) return -1;\n",
                 name);
     } else if (type->linkedlist) {
 
@@ -146,43 +146,43 @@ emit_marshall(
         fprintf(output, "        while (current != NULL) {\n");
         fprintf(output, "            more = 1;\n");
         fprintf(output,
-                "            __marshall_uint32_t(&more, cursor);\n");
+                "            if (unlikely(__marshall_uint32_t(&more, cursor) < 0)) return -1;\n");
         fprintf(output,
-                "            __marshall_%s(current, cursor);\n",
+                "            if (unlikely(__marshall_%s(current, cursor) < 0)) return -1;\n",
                 type->name);
         fprintf(output, "            current = current->%s;\n", liststruct->
                 nextmember);
         fprintf(output, "        }\n");
         fprintf(output, "        more = 0;\n");
-        fprintf(output, "        __marshall_uint32_t(&more, cursor);\n");
+        fprintf(output, "        if (unlikely(__marshall_uint32_t(&more, cursor) < 0)) return -1;\n");
         fprintf(output, "    }\n");
     } else if (type->optional) {
         fprintf(output, "    {\n");
         fprintf(output, "        uint32_t more = !!(in->%s);\n", name);
         fprintf(output,
-                "        __marshall_uint32_t(&more, cursor);\n");
+                "        if (unlikely(__marshall_uint32_t(&more, cursor) < 0)) return -1;\n");
         fprintf(output, "        if (more) {\n");
         fprintf(output,
-                "        __marshall_%s(in->%s, cursor);\n",
+                "        if (unlikely(__marshall_%s(in->%s, cursor) < 0)) return -1;\n",
                 type->name, name);
         fprintf(output, "        }\n");
         fprintf(output, "    }\n");
     } else if (type->vector) {
         fprintf(output,
-                "    __marshall_uint32_t(&in->num_%s, cursor);\n",
+                "    if (unlikely(__marshall_uint32_t(&in->num_%s, cursor) < 0)) return -1;\n",
                 name);
         fprintf(output, "    for (int i = 0; i < in->num_%s; i++) {\n", name);
-        fprintf(output, "        __marshall_%s(&in->%s[i], cursor);\n",
+        fprintf(output, "        if (unlikely(__marshall_%s(&in->%s[i], cursor) < 0)) return -1;\n",
                 type->name, name);
         fprintf(output, "    }\n");
     } else if (type->array) {
         fprintf(output, "    for (int i = 0; i < %s; ++i) {\n",
                 type->array_size);
-        fprintf(output, "        __marshall_%s(&in->%s[i], cursor);\n",
+        fprintf(output, "        if (unlikely(__marshall_%s(&in->%s[i], cursor) < 0)) return -1;\n",
                 type->name, name);
         fprintf(output, "    }\n");
     } else {
-        fprintf(output, "    __marshall_%s(&in->%s, cursor);\n",
+        fprintf(output, "    if (unlikely(__marshall_%s(&in->%s, cursor) < 0)) return -1;\n",
                 type->name, name);
     }
 } /* emit_marshall */
@@ -236,7 +236,8 @@ emit_unmarshall(
         fprintf(output, "        out->%s = NULL;\n", name);
         fprintf(output, "        struct %s *current = NULL, *last = NULL;\n", type->name);
         fprintf(output, "        while (more) {\n");
-        fprintf(output, "          xdr_dbuf_alloc_space(current, sizeof(*current), dbuf);\n");
+        fprintf(output, "          current = xdr_dbuf_alloc_space(sizeof(*current), dbuf);\n");
+        fprintf(output, "          if (unlikely(current == NULL)) return -1;\n");
         fprintf(output,
                 "        rc = __unmarshall_%s_vector(current, cursor, dbuf);\n",
                 type->name);
@@ -265,7 +266,8 @@ emit_unmarshall(
         fprintf(output, "        len += rc;\n");
         fprintf(output, "        rc = 0;\n");
         fprintf(output, "        if (more) {\n");
-        fprintf(output, "         xdr_dbuf_alloc_space(out->%s, sizeof(*out->%s), dbuf);\n", name, name);
+        fprintf(output, "         out->%s = xdr_dbuf_alloc_space(sizeof(*out->%s), dbuf);\n", name, name);
+        fprintf(output, "         if (unlikely(out->%s == NULL)) return -1;\n", name);
         fprintf(output,
                 "        rc = __unmarshall_%s_vector(out->%s, cursor, dbuf);\n",
                 type->name, name);
@@ -279,8 +281,9 @@ emit_unmarshall(
                 name);
         fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "    len += rc;\n");
-        fprintf(output, "     xdr_dbuf_reserve(out, %s, out->num_%s, dbuf);\n",
-                name, name);
+        fprintf(output, "     out->%s = xdr_dbuf_alloc_space(out->num_%s * sizeof(*out->%s), dbuf);\n",
+                name, name, name);
+        fprintf(output, "     if (unlikely(out->%s == NULL)) return -1;\n", name);
         fprintf(output, "    for (int i = 0; i < out->num_%s; i++) {\n", name);
         fprintf(output,
                 "    rc = __unmarshall_%s_vector(&out->%s[i], cursor, dbuf);\n",
@@ -365,7 +368,8 @@ emit_unmarshall_contig(
         fprintf(output, "        out->%s = NULL;\n", name);
         fprintf(output, "        struct %s *current = NULL, *last = NULL;\n", type->name);
         fprintf(output, "        while (more) {\n");
-        fprintf(output, "          xdr_dbuf_alloc_space(current, sizeof(*current), dbuf);\n");
+        fprintf(output, "          current = xdr_dbuf_alloc_space(sizeof(*current), dbuf);\n");
+        fprintf(output, "          if (unlikely(current == NULL)) return -1;\n");
         fprintf(output,
                 "        rc = __unmarshall_%s_contig(current, cursor, dbuf);\n",
                 type->name);
@@ -394,7 +398,8 @@ emit_unmarshall_contig(
         fprintf(output, "        len += rc;\n");
         fprintf(output, "        rc = 0;\n");
         fprintf(output, "        if (more) {\n");
-        fprintf(output, "         xdr_dbuf_alloc_space(out->%s, sizeof(*out->%s), dbuf);\n", name, name);
+        fprintf(output, "         out->%s = xdr_dbuf_alloc_space(sizeof(*out->%s), dbuf);\n", name, name);
+        fprintf(output, "         if (unlikely(out->%s == NULL)) return -1;\n", name);
         fprintf(output,
                 "        rc = __unmarshall_%s_contig(out->%s, cursor, dbuf);\n",
                 type->name, name);
@@ -410,8 +415,9 @@ emit_unmarshall_contig(
                 name);
         fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "    len += rc;\n");
-        fprintf(output, "     xdr_dbuf_reserve(out, %s, out->num_%s, dbuf);\n",
-                name, name);
+        fprintf(output, "     out->%s = xdr_dbuf_alloc_space(out->num_%s * sizeof(*out->%s), dbuf);\n",
+                name, name, name);
+        fprintf(output, "     if (unlikely(out->%s == NULL)) return -1;\n", name);
         fprintf(output, "    for (int i = 0; i < out->num_%s; i++) {\n", name);
         fprintf(output,
                 "    rc = __unmarshall_%s_contig(&out->%s[i], cursor, dbuf);\n",
@@ -520,8 +526,13 @@ emit_internal_headers(
     FILE       *source,
     const char *name)
 {
+    int is_recursive = is_type_recursive(name);
 
-    fprintf(source, "static void\n");
+    if (is_recursive) {
+        fprintf(source, "static int WARN_UNUSED_RESULT\n");
+    } else {
+        fprintf(source, "static FORCE_INLINE int WARN_UNUSED_RESULT\n");
+    }
     fprintf(source, "__marshall_%s(\n", name);
     fprintf(source, "    const struct %s *in,\n", name);
     fprintf(source, "    struct xdr_write_cursor *cursor);\n\n");
@@ -766,10 +777,17 @@ emit_length_struct(
     struct xdr_struct *xdr_structp)
 {
     struct xdr_struct_member *member;
+    int                       is_recursive = is_type_recursive(name);
 
-    fprintf(source,
-            "static int __marshall_length_%s(const struct %s *in)\n",
-            name, name);
+    if (is_recursive) {
+        fprintf(source,
+                "static int __marshall_length_%s(const struct %s *in)\n",
+                name, name);
+    } else {
+        fprintf(source,
+                "static FORCE_INLINE int __marshall_length_%s(const struct %s *in)\n",
+                name, name);
+    }
 
     fprintf(source, "{\n");
     fprintf(source, "    uint32_t length = 0;\n");
@@ -843,10 +861,17 @@ emit_length_union(
     struct xdr_union *xdr_unionp)
 {
     struct xdr_union_case *casep;
+    int                    is_recursive = is_type_recursive(name);
 
-    fprintf(source,
-            "static int __marshall_length_%s(const struct %s *in)\n",
-            name, name);
+    if (is_recursive) {
+        fprintf(source,
+                "static int __marshall_length_%s(const struct %s *in)\n",
+                name, name);
+    } else {
+        fprintf(source,
+                "static FORCE_INLINE int __marshall_length_%s(const struct %s *in)\n",
+                name, name);
+    }
     fprintf(source, "{\n");
     fprintf(source, "    uint32_t length = 0;\n");
     emit_length_member(source, xdr_unionp->pivot_name, xdr_unionp->pivot_type);
@@ -932,13 +957,13 @@ emit_program_header(
 
         if (strcmp(functionp->reply_type->name, "void")) {
             fprintf(header,
-                    "   int (*send_reply_%s)(struct evpl *evpl, struct %s *, void *);\n",
+                    "   int WARN_UNUSED_RESULT (*send_reply_%s)(struct evpl *evpl, struct %s *, void *);\n",
                     functionp->name,
                     functionp->reply_type->name);
 
         } else {
             fprintf(header,
-                    "   int (*send_reply_%s)(struct evpl *evpl, void *);\n",
+                    "   int WARN_UNUSED_RESULT (*send_reply_%s)(struct evpl *evpl, void *);\n",
                     functionp->name);
         }
 
@@ -1033,8 +1058,10 @@ emit_program(
             fprintf(source, "        struct %s *%s_arg;\n",
                     functionp->call_type->name,
                     functionp->name);
-            fprintf(source, "        xdr_dbuf_alloc_space(%s_arg, sizeof(*%s_arg), msg->dbuf);\n",
+            fprintf(source, "        %s_arg = xdr_dbuf_alloc_space(sizeof(*%s_arg), msg->dbuf);\n",
                     functionp->name, functionp->name);
+            fprintf(source, "        if (unlikely(%s_arg == NULL)) return 1;\n",
+                    functionp->name);
             fprintf(source,
                     "        len = unmarshall_%s(%s_arg, iov, niov, &msg->read_chunk, msg->dbuf);\n",
                     functionp->call_type->name, functionp->name);
@@ -1089,12 +1116,15 @@ emit_program(
 
         /* Call has an argument */
         if (strcmp(functionp->reply_type->name, "void")) {
+            fprintf(source, "        {\n");
             /* We will unmarshall argument into provided buffer */
             fprintf(source, "        struct %s *%s_arg;\n",
                     functionp->reply_type->name,
                     functionp->name);
-            fprintf(source, "        xdr_dbuf_alloc_space(%s_arg, sizeof(*%s_arg), msg->dbuf);\n",
+            fprintf(source, "        %s_arg = xdr_dbuf_alloc_space(sizeof(*%s_arg), msg->dbuf);\n",
                     functionp->name, functionp->name);
+            fprintf(source, "        if (unlikely(%s_arg == NULL)) return 1;\n",
+                    functionp->name);
             fprintf(source,
                     "        len = unmarshall_%s(%s_arg, iov, niov, &msg->read_chunk, msg->dbuf);\n",
                     functionp->reply_type->name, functionp->name);
@@ -1108,6 +1138,7 @@ emit_program(
             fprintf(source,
                     "        callback_%s(evpl, %s_arg, 0, callback_private_data);\n",
                     functionp->name, functionp->name);
+            fprintf(source, "        }\n");
         } else {
             fprintf(source,
                     " void (*callback_%s)(struct evpl *evpl, int status, void *callback_private_data) = callback_fn;\n",
@@ -1137,8 +1168,9 @@ emit_program(
             fprintf(source, "{\n");
             fprintf(source, "    struct evpl_rpc2_msg *msg = private_data;\n");
             fprintf(source, "    struct evpl_iovec iov, *msg_iov;\n");
-            fprintf(source, "    int niov, msg_niov = 256,len;\n");
-            fprintf(source, "    xdr_dbuf_alloc_space(msg_iov, sizeof(*msg_iov) * 256, msg->dbuf);\n");
+            fprintf(source, "    int niov, msg_niov = 260,len;\n");
+            fprintf(source, "    msg_iov = xdr_dbuf_alloc_space(sizeof(*msg_iov) * 260, msg->dbuf);\n");
+            fprintf(source, "    if (unlikely(msg_iov == NULL)) return 1;\n");
             fprintf(source,
                     "    niov = evpl_iovec_reserve(evpl, 128*1024, 8, 1, &iov);\n");
             fprintf(source, "    if (unlikely(niov != 1)) return 1;\n");
@@ -1198,7 +1230,7 @@ emit_program(
         fprintf(source, "    void *callback_private_data)\n");
         fprintf(source, "{\n");
         fprintf(source, "    struct evpl_iovec iov, *msg_iov;\n");
-        fprintf(source, "    int msg_niov = 256, len;\n");
+        fprintf(source, "    int msg_niov = 260, len;\n");
         fprintf(source, "    xdr_dbuf *dbuf = (xdr_dbuf *) conn->thread_dbuf;\n");
 
         if (has_args) {
@@ -1207,7 +1239,11 @@ emit_program(
             fprintf(source, "    rdma_chunk.max_length = conn->rdma && ddp ? UINT32_MAX : 0;\n");
             fprintf(source, "    rdma_chunk.niov = 0;\n");
             fprintf(source, "    xdr_dbuf_reset(dbuf);\n");
-            fprintf(source, "    xdr_dbuf_alloc_space(msg_iov, sizeof(*msg_iov) * 256, dbuf);\n");
+            fprintf(source, "    msg_iov = xdr_dbuf_alloc_space(sizeof(*msg_iov) * 260, dbuf);\n");
+            fprintf(source, "    if (unlikely(msg_iov == NULL)) {\n");
+            fprintf(source, "        xdr_dbuf_free(dbuf);\n");
+            fprintf(source, "        return;\n");
+            fprintf(source, "    }\n");
             fprintf(source, "    evpl_iovec_reserve(evpl, 128*1024, 8, 1, &iov);\n\n");
 
             fprintf(source, "    len = marshall_%s(args, &iov, msg_iov, &msg_niov, "
@@ -1346,7 +1382,7 @@ emit_wrappers(
     FILE       *source,
     const char *name)
 {
-    fprintf(source, "int\n");
+    fprintf(source, "int WARN_UNUSED_RESULT\n");
     fprintf(source, "marshall_%s(\n", name);
     fprintf(source, "    const struct %s *out,\n", name);
     fprintf(source, "    xdr_iovec *iov_in,\n");
@@ -1357,13 +1393,13 @@ emit_wrappers(
     fprintf(source, "    struct xdr_write_cursor cursor;\n");
     fprintf(source,
             "    xdr_write_cursor_init(&cursor, iov_in, iov_out, *niov_out, rdma_chunk, out_offset);\n");
-    fprintf(source, "    __marshall_%s(out, &cursor);\n", name);
-    fprintf(source, "    xdr_write_cursor_flush(&cursor);\n");
+    fprintf(source, "    if (unlikely(__marshall_%s(out, &cursor) < 0)) return -1;\n", name);
+    fprintf(source, "    if (unlikely(xdr_write_cursor_flush(&cursor) < 0)) return -1;\n");
     fprintf(source, "    *niov_out = cursor.niov;\n");
     fprintf(source, "    return cursor.total;\n");
     fprintf(source, "}\n\n");
 
-    fprintf(source, "int\n");
+    fprintf(source, "int WARN_UNUSED_RESULT\n");
     fprintf(source, "unmarshall_%s(\n", name);
     fprintf(source, "    struct %s *out,\n", name);
     fprintf(source, "    const xdr_iovec *iov,\n");
@@ -1796,9 +1832,9 @@ main(
         int is_recursive = is_type_recursive(xdr_structp->name);
 
         if (is_recursive) {
-            fprintf(source, "static void\n");
+            fprintf(source, "static int WARN_UNUSED_RESULT\n");
         } else {
-            fprintf(source, "static FORCE_INLINE void\n");
+            fprintf(source, "static FORCE_INLINE int WARN_UNUSED_RESULT\n");
         }
         fprintf(source, "__marshall_%s(\n", xdr_structp->name);
         fprintf(source, "    const struct %s *in,\n", xdr_structp->name);
@@ -1815,12 +1851,13 @@ main(
                           xdr_struct_memberp->type);
         }
 
+        fprintf(source, "    return 0;\n");
         fprintf(source, "}\n\n");
 
         if (is_recursive) {
-            fprintf(source, "static int\n");
+            fprintf(source, "static int WARN_UNUSED_RESULT\n");
         } else {
-            fprintf(source, "static FORCE_INLINE int\n");
+            fprintf(source, "static FORCE_INLINE int WARN_UNUSED_RESULT\n");
         }
         fprintf(source, "__unmarshall_%s_vector(\n", xdr_structp->name);
         fprintf(source, "    struct %s *out,\n", xdr_structp->name);
@@ -1843,9 +1880,9 @@ main(
         fprintf(source, "}\n\n");
 
         if (is_recursive) {
-            fprintf(source, "static int\n");
+            fprintf(source, "static int WARN_UNUSED_RESULT\n");
         } else {
-            fprintf(source, "static FORCE_INLINE int\n");
+            fprintf(source, "static FORCE_INLINE int WARN_UNUSED_RESULT\n");
         }
         fprintf(source, "__unmarshall_%s_contig(\n", xdr_structp->name);
         fprintf(source, "    struct %s *out,\n", xdr_structp->name);
@@ -1878,9 +1915,9 @@ main(
         int is_recursive = is_type_recursive(xdr_unionp->name);
 
         if (is_recursive) {
-            fprintf(source, "static void\n");
+            fprintf(source, "static int WARN_UNUSED_RESULT\n");
         } else {
-            fprintf(source, "static FORCE_INLINE void\n");
+            fprintf(source, "static FORCE_INLINE int WARN_UNUSED_RESULT\n");
         }
         fprintf(source, "__marshall_%s(\n", xdr_unionp->name);
         fprintf(source, "    const struct %s *in,\n", xdr_unionp->name);
@@ -1919,13 +1956,13 @@ main(
         }
 
         fprintf(source, "    }\n");
-        fprintf(source, "    ;\n");
+        fprintf(source, "    return 0;\n");
         fprintf(source, "}\n\n");
 
         if (is_recursive) {
-            fprintf(source, "static int\n");
+            fprintf(source, "static int WARN_UNUSED_RESULT\n");
         } else {
-            fprintf(source, "static FORCE_INLINE int\n");
+            fprintf(source, "static FORCE_INLINE int WARN_UNUSED_RESULT\n");
         }
         fprintf(source, "__unmarshall_%s_vector(\n", xdr_unionp->name);
         fprintf(source, "    struct %s *out,\n", xdr_unionp->name);
@@ -1970,9 +2007,9 @@ main(
         fprintf(source, "}\n\n");
 
         if (is_recursive) {
-            fprintf(source, "static int\n");
+            fprintf(source, "static int WARN_UNUSED_RESULT\n");
         } else {
-            fprintf(source, "static FORCE_INLINE int\n");
+            fprintf(source, "static FORCE_INLINE int WARN_UNUSED_RESULT\n");
         }
         fprintf(source, "__unmarshall_%s_contig(\n", xdr_unionp->name);
         fprintf(source, "    struct %s *out,\n", xdr_unionp->name);

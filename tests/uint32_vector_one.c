@@ -22,7 +22,11 @@ main(
 
     dbuf = xdr_dbuf_alloc(16 * 1024);
 
-    xdr_dbuf_reserve(&msg1, value, 1, dbuf);
+    msg1.num_value = 1;
+    msg1.value = xdr_dbuf_alloc_space(1 * sizeof(*msg1.value), dbuf);
+    if (msg1.value == NULL) {
+        return 1;
+    }
     msg1.value[0] = 42;
 
     rc = marshall_MyMsg(&msg1, &iov_in, &iov_out, &one, NULL, 0);

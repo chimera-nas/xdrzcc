@@ -11,6 +11,18 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
+#ifndef WARN_UNUSED_RESULT
+#define WARN_UNUSED_RESULT __attribute__((warn_unused_result))
+#endif /* ifndef WARN_UNUSED_RESULT */
+
+#ifndef FORCE_INLINE
+#define FORCE_INLINE       __attribute__((always_inline)) inline
+#endif /* ifndef FORCE_INLINE */
+
+#ifndef unlikely
+#define unlikely(x) __builtin_expect(!!(x), 0)
+#endif /* ifndef unlikely */
+
 struct evpl_rpc2_rdma_chunk;
 
 #ifndef XDR_MAX_DBUF
@@ -38,7 +50,7 @@ xdr_dbuf_alloc(int bytes)
 {
     xdr_dbuf *dbuf;
 
-    dbuf = malloc(sizeof(*dbuf));
+    dbuf = (xdr_dbuf *) malloc(sizeof(*dbuf));
 
     dbuf->buffer = malloc(bytes);
 
@@ -61,51 +73,51 @@ xdr_dbuf_reset(xdr_dbuf *dbuf)
     dbuf->used = 0;
 } /* xdr_dbuf_reset */
 
-#define xdr_dbuf_alloc_space(ptr, isize, dbuf)      \
-        {                                                     \
-            if ((dbuf)->used + (isize) > (dbuf)->size) abort(); \
-            (ptr)         = (dbuf)->buffer + (dbuf)->used;    \
-            (dbuf)->used += (isize); \
-            (dbuf)->used  = ((dbuf)->used + 7) & ~7; \
-        }
+static FORCE_INLINE void * WARN_UNUSED_RESULT
+xdr_dbuf_alloc_space(
+    int       isize,
+    xdr_dbuf *dbuf)
+{
+    void *ptr;
 
-#define xdr_dbuf_alloc_opaque(opaque, ilen, dbuf) \
-        {                                      \
-            (opaque)->len = (ilen);             \
-            xdr_dbuf_alloc_space((opaque)->data, (ilen), (dbuf)); \
-        }
+    if (unlikely(dbuf->used + isize > dbuf->size)) {
+        return NULL;
+    }
+    ptr         = (char *) dbuf->buffer + dbuf->used;
+    dbuf->used += isize;
+    dbuf->used  = (dbuf->used + 7) & ~7;
+    return ptr;
+} // xdr_dbuf_alloc_space
 
-#define xdr_dbuf_opaque_copy(opaque, ptr, ilen, dbuf) \
-        {                                      \
-            (opaque)->len = (ilen);             \
-            xdr_dbuf_alloc_space((opaque)->data, (ilen), (dbuf)); \
-            memcpy((opaque)->data, (ptr), (ilen)); \
-        }
+static FORCE_INLINE int WARN_UNUSED_RESULT
+xdr_dbuf_alloc_opaque(
+    xdr_opaque *opaque,
+    uint32_t    ilen,
+    xdr_dbuf   *dbuf)
+{
+    opaque->len  = ilen;
+    opaque->data = xdr_dbuf_alloc_space(ilen, dbuf);
+    if (unlikely(opaque->data == NULL)) {
+        return -1;
+    }
+    return 0;
+} // xdr_dbuf_alloc_opaque
 
-#define xdr_dbuf_reserve(structp, member, num, dbuf)      \
-        {                                                     \
-            (structp)->num_ ## member = num;                    \
-            xdr_dbuf_alloc_space((structp)->member, num * sizeof(*((structp)->member)), (dbuf)); \
-        }
-
-#define xdr_dbuf_reserve_str(structp, member, ilen, dbuf) \
-        {                                                                  \
-            (structp)->member.len = (ilen);                                \
-            xdr_dbuf_alloc_space((structp)->member.str, (ilen) + 1, (dbuf)); \
-        }
-
-#define xdr_dbuf_strncpy(structp, member, istr, ilen, dbuf)            \
-        {                                                                  \
-            xdr_dbuf_reserve_str(structp, member, ilen, dbuf);              \
-            memcpy((structp)->member.str, (istr), (ilen) + 1);             \
-        }
-
-#define xdr_dbuf_memcpy(object, ibuf, ilen, dbuf)             \
-        {                                                                  \
-            (object)->len = (ilen);                                \
-            xdr_dbuf_alloc_space((object)->data, (ilen), (dbuf));  \
-            memcpy((object)->data, (ibuf), (ilen));                \
-        }
+static FORCE_INLINE int WARN_UNUSED_RESULT
+xdr_dbuf_opaque_copy(
+    xdr_opaque *opaque,
+    const void *ptr,
+    uint32_t    ilen,
+    xdr_dbuf   *dbuf)
+{
+    opaque->len  = ilen;
+    opaque->data = xdr_dbuf_alloc_space(ilen, dbuf);
+    if (unlikely(opaque->data == NULL)) {
+        return -1;
+    }
+    memcpy(opaque->data, ptr, ilen);
+    return 0;
+} // xdr_dbuf_opaque_copy
 
 #define xdr_set_str_static(structp, member, istr, ilen) \
         {                                                   \
