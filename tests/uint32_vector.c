@@ -22,7 +22,11 @@ main(
 
     dbuf = xdr_dbuf_alloc(16 * 1024);
 
-    xdr_dbuf_reserve(&msg1, value, 16, dbuf);
+    msg1.num_value = 16;
+    msg1.value = xdr_dbuf_alloc_space(16 * sizeof(*msg1.value), dbuf);
+    if (msg1.value == NULL) {
+        return 1;
+    }
 
     for (i = 0; i < 16; ++i) {
         msg1.value[i] = i;
