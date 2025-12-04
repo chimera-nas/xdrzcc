@@ -1116,6 +1116,7 @@ emit_program(
 
         /* Call has an argument */
         if (strcmp(functionp->reply_type->name, "void")) {
+            fprintf(source, "        {\n");
             /* We will unmarshall argument into provided buffer */
             fprintf(source, "        struct %s *%s_arg;\n",
                     functionp->reply_type->name,
@@ -1137,6 +1138,7 @@ emit_program(
             fprintf(source,
                     "        callback_%s(evpl, %s_arg, 0, callback_private_data);\n",
                     functionp->name, functionp->name);
+            fprintf(source, "        }\n");
         } else {
             fprintf(source,
                     " void (*callback_%s)(struct evpl *evpl, int status, void *callback_private_data) = callback_fn;\n",
