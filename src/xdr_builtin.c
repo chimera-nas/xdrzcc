@@ -622,7 +622,10 @@ __unmarshall_xdr_string_vector(
         }
 
     } else {
-        xdr_dbuf_alloc_space(str->str, str->len, dbuf);
+        str->str = xdr_dbuf_alloc_space(str->len, dbuf);
+        if (unlikely(str->str == NULL)) {
+            return -1;
+        }
 
         rc = xdr_read_cursor_vector_extract(cursor, str->str, str->len);
 
@@ -690,7 +693,10 @@ __unmarshall_opaque_fixed_vector(
 {
     int pad, chunk, left = size;
 
-    xdr_dbuf_alloc_space(v->iov, sizeof(*v->iov) * ((cursor->last - cursor->cur) + 1), dbuf);
+    v->iov = xdr_dbuf_alloc_space(sizeof(*v->iov) * ((cursor->last - cursor->cur) + 1), dbuf);
+    if (unlikely(v->iov == NULL)) {
+        return -1;
+    }
 
     v->length = size;
     v->niov   = 0;
@@ -740,7 +746,10 @@ __unmarshall_opaque_fixed_contig(
 
     v->length = size;
     v->niov   = 1;
-    xdr_dbuf_alloc_space(v->iov, sizeof(*v->iov), dbuf);
+    v->iov = xdr_dbuf_alloc_space(sizeof(*v->iov), dbuf);
+    if (unlikely(v->iov == NULL)) {
+        return -1;
+    }
 
     xdr_iovec_set_data(&v->iov[0], (void *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset));
     xdr_iovec_set_len(&v->iov[0], size);
@@ -881,7 +890,10 @@ __unmarshall_opaque_vector(
         }
 
     } else {
-        xdr_dbuf_alloc_space(v->data, v->len, dbuf);
+        v->data = xdr_dbuf_alloc_space(v->len, dbuf);
+        if (unlikely(v->data == NULL)) {
+            return -1;
+        }
 
         rc = xdr_read_cursor_vector_extract(cursor, v->data, v->len);
 

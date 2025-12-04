@@ -236,7 +236,8 @@ emit_unmarshall(
         fprintf(output, "        out->%s = NULL;\n", name);
         fprintf(output, "        struct %s *current = NULL, *last = NULL;\n", type->name);
         fprintf(output, "        while (more) {\n");
-        fprintf(output, "          xdr_dbuf_alloc_space(current, sizeof(*current), dbuf);\n");
+        fprintf(output, "          current = xdr_dbuf_alloc_space(sizeof(*current), dbuf);\n");
+        fprintf(output, "          if (unlikely(current == NULL)) return -1;\n");
         fprintf(output,
                 "        rc = __unmarshall_%s_vector(current, cursor, dbuf);\n",
                 type->name);
@@ -265,7 +266,8 @@ emit_unmarshall(
         fprintf(output, "        len += rc;\n");
         fprintf(output, "        rc = 0;\n");
         fprintf(output, "        if (more) {\n");
-        fprintf(output, "         xdr_dbuf_alloc_space(out->%s, sizeof(*out->%s), dbuf);\n", name, name);
+        fprintf(output, "         out->%s = xdr_dbuf_alloc_space(sizeof(*out->%s), dbuf);\n", name, name);
+        fprintf(output, "         if (unlikely(out->%s == NULL)) return -1;\n", name);
         fprintf(output,
                 "        rc = __unmarshall_%s_vector(out->%s, cursor, dbuf);\n",
                 type->name, name);
@@ -279,8 +281,9 @@ emit_unmarshall(
                 name);
         fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "    len += rc;\n");
-        fprintf(output, "     xdr_dbuf_reserve(out, %s, out->num_%s, dbuf);\n",
-                name, name);
+        fprintf(output, "     out->%s = xdr_dbuf_alloc_space(out->num_%s * sizeof(*out->%s), dbuf);\n",
+                name, name, name);
+        fprintf(output, "     if (unlikely(out->%s == NULL)) return -1;\n", name);
         fprintf(output, "    for (int i = 0; i < out->num_%s; i++) {\n", name);
         fprintf(output,
                 "    rc = __unmarshall_%s_vector(&out->%s[i], cursor, dbuf);\n",
@@ -365,7 +368,8 @@ emit_unmarshall_contig(
         fprintf(output, "        out->%s = NULL;\n", name);
         fprintf(output, "        struct %s *current = NULL, *last = NULL;\n", type->name);
         fprintf(output, "        while (more) {\n");
-        fprintf(output, "          xdr_dbuf_alloc_space(current, sizeof(*current), dbuf);\n");
+        fprintf(output, "          current = xdr_dbuf_alloc_space(sizeof(*current), dbuf);\n");
+        fprintf(output, "          if (unlikely(current == NULL)) return -1;\n");
         fprintf(output,
                 "        rc = __unmarshall_%s_contig(current, cursor, dbuf);\n",
                 type->name);
@@ -394,7 +398,8 @@ emit_unmarshall_contig(
         fprintf(output, "        len += rc;\n");
         fprintf(output, "        rc = 0;\n");
         fprintf(output, "        if (more) {\n");
-        fprintf(output, "         xdr_dbuf_alloc_space(out->%s, sizeof(*out->%s), dbuf);\n", name, name);
+        fprintf(output, "         out->%s = xdr_dbuf_alloc_space(sizeof(*out->%s), dbuf);\n", name, name);
+        fprintf(output, "         if (unlikely(out->%s == NULL)) return -1;\n", name);
         fprintf(output,
                 "        rc = __unmarshall_%s_contig(out->%s, cursor, dbuf);\n",
                 type->name, name);
@@ -410,8 +415,9 @@ emit_unmarshall_contig(
                 name);
         fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "    len += rc;\n");
-        fprintf(output, "     xdr_dbuf_reserve(out, %s, out->num_%s, dbuf);\n",
-                name, name);
+        fprintf(output, "     out->%s = xdr_dbuf_alloc_space(out->num_%s * sizeof(*out->%s), dbuf);\n",
+                name, name, name);
+        fprintf(output, "     if (unlikely(out->%s == NULL)) return -1;\n", name);
         fprintf(output, "    for (int i = 0; i < out->num_%s; i++) {\n", name);
         fprintf(output,
                 "    rc = __unmarshall_%s_contig(&out->%s[i], cursor, dbuf);\n",
@@ -1038,8 +1044,10 @@ emit_program(
             fprintf(source, "        struct %s *%s_arg;\n",
                     functionp->call_type->name,
                     functionp->name);
-            fprintf(source, "        xdr_dbuf_alloc_space(%s_arg, sizeof(*%s_arg), msg->dbuf);\n",
+            fprintf(source, "        %s_arg = xdr_dbuf_alloc_space(sizeof(*%s_arg), msg->dbuf);\n",
                     functionp->name, functionp->name);
+            fprintf(source, "        if (unlikely(%s_arg == NULL)) return 1;\n",
+                    functionp->name);
             fprintf(source,
                     "        len = unmarshall_%s(%s_arg, iov, niov, &msg->read_chunk, msg->dbuf);\n",
                     functionp->call_type->name, functionp->name);
@@ -1098,8 +1106,10 @@ emit_program(
             fprintf(source, "        struct %s *%s_arg;\n",
                     functionp->reply_type->name,
                     functionp->name);
-            fprintf(source, "        xdr_dbuf_alloc_space(%s_arg, sizeof(*%s_arg), msg->dbuf);\n",
+            fprintf(source, "        %s_arg = xdr_dbuf_alloc_space(sizeof(*%s_arg), msg->dbuf);\n",
                     functionp->name, functionp->name);
+            fprintf(source, "        if (unlikely(%s_arg == NULL)) return 1;\n",
+                    functionp->name);
             fprintf(source,
                     "        len = unmarshall_%s(%s_arg, iov, niov, &msg->read_chunk, msg->dbuf);\n",
                     functionp->reply_type->name, functionp->name);
@@ -1143,7 +1153,8 @@ emit_program(
             fprintf(source, "    struct evpl_rpc2_msg *msg = private_data;\n");
             fprintf(source, "    struct evpl_iovec iov, *msg_iov;\n");
             fprintf(source, "    int niov, msg_niov = 260,len;\n");
-            fprintf(source, "    xdr_dbuf_alloc_space(msg_iov, sizeof(*msg_iov) * 260, msg->dbuf);\n");
+            fprintf(source, "    msg_iov = xdr_dbuf_alloc_space(sizeof(*msg_iov) * 260, msg->dbuf);\n");
+            fprintf(source, "    if (unlikely(msg_iov == NULL)) return 1;\n");
             fprintf(source,
                     "    niov = evpl_iovec_reserve(evpl, 128*1024, 8, 1, &iov);\n");
             fprintf(source, "    if (unlikely(niov != 1)) return 1;\n");
@@ -1212,7 +1223,11 @@ emit_program(
             fprintf(source, "    rdma_chunk.max_length = conn->rdma && ddp ? UINT32_MAX : 0;\n");
             fprintf(source, "    rdma_chunk.niov = 0;\n");
             fprintf(source, "    xdr_dbuf_reset(dbuf);\n");
-            fprintf(source, "    xdr_dbuf_alloc_space(msg_iov, sizeof(*msg_iov) * 260, dbuf);\n");
+            fprintf(source, "    msg_iov = xdr_dbuf_alloc_space(sizeof(*msg_iov) * 260, dbuf);\n");
+            fprintf(source, "    if (unlikely(msg_iov == NULL)) {\n");
+            fprintf(source, "        xdr_dbuf_free(dbuf);\n");
+            fprintf(source, "        return;\n");
+            fprintf(source, "    }\n");
             fprintf(source, "    evpl_iovec_reserve(evpl, 128*1024, 8, 1, &iov);\n\n");
 
             fprintf(source, "    len = marshall_%s(args, &iov, msg_iov, &msg_niov, "
