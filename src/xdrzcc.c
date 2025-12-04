@@ -113,20 +113,20 @@ emit_marshall(
     if (type->opaque) {
         if (type->array) {
             fprintf(output,
-                    "    xdr_write_cursor_append(cursor, in->%s, %s);\n",
+                    "    if (unlikely(xdr_write_cursor_append(cursor, in->%s, %s) < 0)) return -1;\n",
                     name, type->array_size);
         } else if (type->zerocopy) {
             fprintf(output,
-                    "    __marshall_opaque_zerocopy(&in->%s, cursor);\n",
+                    "    if (unlikely(__marshall_opaque_zerocopy(&in->%s, cursor) < 0)) return -1;\n",
                     name);
         } else {
             fprintf(output,
-                    "    __marshall_opaque(&in->%s, %s, cursor);\n",
+                    "    if (unlikely(__marshall_opaque(&in->%s, %s, cursor) < 0)) return -1;\n",
                     name, type->vector_bound ? type->vector_bound : "0");
         }
     } else if (strcmp(type->name, "xdr_string") == 0) {
         fprintf(output,
-                "    __marshall_xdr_string(&in->%s, cursor);\n",
+                "    if (unlikely(__marshall_xdr_string(&in->%s, cursor) < 0)) return -1;\n",
                 name);
     } else if (type->linkedlist) {
 
@@ -146,43 +146,43 @@ emit_marshall(
         fprintf(output, "        while (current != NULL) {\n");
         fprintf(output, "            more = 1;\n");
         fprintf(output,
-                "            __marshall_uint32_t(&more, cursor);\n");
+                "            if (unlikely(__marshall_uint32_t(&more, cursor) < 0)) return -1;\n");
         fprintf(output,
-                "            __marshall_%s(current, cursor);\n",
+                "            if (unlikely(__marshall_%s(current, cursor) < 0)) return -1;\n",
                 type->name);
         fprintf(output, "            current = current->%s;\n", liststruct->
                 nextmember);
         fprintf(output, "        }\n");
         fprintf(output, "        more = 0;\n");
-        fprintf(output, "        __marshall_uint32_t(&more, cursor);\n");
+        fprintf(output, "        if (unlikely(__marshall_uint32_t(&more, cursor) < 0)) return -1;\n");
         fprintf(output, "    }\n");
     } else if (type->optional) {
         fprintf(output, "    {\n");
         fprintf(output, "        uint32_t more = !!(in->%s);\n", name);
         fprintf(output,
-                "        __marshall_uint32_t(&more, cursor);\n");
+                "        if (unlikely(__marshall_uint32_t(&more, cursor) < 0)) return -1;\n");
         fprintf(output, "        if (more) {\n");
         fprintf(output,
-                "        __marshall_%s(in->%s, cursor);\n",
+                "        if (unlikely(__marshall_%s(in->%s, cursor) < 0)) return -1;\n",
                 type->name, name);
         fprintf(output, "        }\n");
         fprintf(output, "    }\n");
     } else if (type->vector) {
         fprintf(output,
-                "    __marshall_uint32_t(&in->num_%s, cursor);\n",
+                "    if (unlikely(__marshall_uint32_t(&in->num_%s, cursor) < 0)) return -1;\n",
                 name);
         fprintf(output, "    for (int i = 0; i < in->num_%s; i++) {\n", name);
-        fprintf(output, "        __marshall_%s(&in->%s[i], cursor);\n",
+        fprintf(output, "        if (unlikely(__marshall_%s(&in->%s[i], cursor) < 0)) return -1;\n",
                 type->name, name);
         fprintf(output, "    }\n");
     } else if (type->array) {
         fprintf(output, "    for (int i = 0; i < %s; ++i) {\n",
                 type->array_size);
-        fprintf(output, "        __marshall_%s(&in->%s[i], cursor);\n",
+        fprintf(output, "        if (unlikely(__marshall_%s(&in->%s[i], cursor) < 0)) return -1;\n",
                 type->name, name);
         fprintf(output, "    }\n");
     } else {
-        fprintf(output, "    __marshall_%s(&in->%s, cursor);\n",
+        fprintf(output, "    if (unlikely(__marshall_%s(&in->%s, cursor) < 0)) return -1;\n",
                 type->name, name);
     }
 } /* emit_marshall */
@@ -520,8 +520,13 @@ emit_internal_headers(
     FILE       *source,
     const char *name)
 {
+    int is_recursive = is_type_recursive(name);
 
-    fprintf(source, "static void\n");
+    if (is_recursive) {
+        fprintf(source, "static int WARN_UNUSED_RESULT\n");
+    } else {
+        fprintf(source, "static FORCE_INLINE int WARN_UNUSED_RESULT\n");
+    }
     fprintf(source, "__marshall_%s(\n", name);
     fprintf(source, "    const struct %s *in,\n", name);
     fprintf(source, "    struct xdr_write_cursor *cursor);\n\n");
@@ -1357,8 +1362,8 @@ emit_wrappers(
     fprintf(source, "    struct xdr_write_cursor cursor;\n");
     fprintf(source,
             "    xdr_write_cursor_init(&cursor, iov_in, iov_out, *niov_out, rdma_chunk, out_offset);\n");
-    fprintf(source, "    __marshall_%s(out, &cursor);\n", name);
-    fprintf(source, "    xdr_write_cursor_flush(&cursor);\n");
+    fprintf(source, "    if (unlikely(__marshall_%s(out, &cursor) < 0)) return -1;\n", name);
+    fprintf(source, "    if (unlikely(xdr_write_cursor_flush(&cursor) < 0)) return -1;\n");
     fprintf(source, "    *niov_out = cursor.niov;\n");
     fprintf(source, "    return cursor.total;\n");
     fprintf(source, "}\n\n");
@@ -1796,9 +1801,9 @@ main(
         int is_recursive = is_type_recursive(xdr_structp->name);
 
         if (is_recursive) {
-            fprintf(source, "static void\n");
+            fprintf(source, "static int WARN_UNUSED_RESULT\n");
         } else {
-            fprintf(source, "static FORCE_INLINE void\n");
+            fprintf(source, "static FORCE_INLINE int WARN_UNUSED_RESULT\n");
         }
         fprintf(source, "__marshall_%s(\n", xdr_structp->name);
         fprintf(source, "    const struct %s *in,\n", xdr_structp->name);
@@ -1815,6 +1820,7 @@ main(
                           xdr_struct_memberp->type);
         }
 
+        fprintf(source, "    return 0;\n");
         fprintf(source, "}\n\n");
 
         if (is_recursive) {
@@ -1878,9 +1884,9 @@ main(
         int is_recursive = is_type_recursive(xdr_unionp->name);
 
         if (is_recursive) {
-            fprintf(source, "static void\n");
+            fprintf(source, "static int WARN_UNUSED_RESULT\n");
         } else {
-            fprintf(source, "static FORCE_INLINE void\n");
+            fprintf(source, "static FORCE_INLINE int WARN_UNUSED_RESULT\n");
         }
         fprintf(source, "__marshall_%s(\n", xdr_unionp->name);
         fprintf(source, "    const struct %s *in,\n", xdr_unionp->name);
@@ -1919,7 +1925,7 @@ main(
         }
 
         fprintf(source, "    }\n");
-        fprintf(source, "    ;\n");
+        fprintf(source, "    return 0;\n");
         fprintf(source, "}\n\n");
 
         if (is_recursive) {

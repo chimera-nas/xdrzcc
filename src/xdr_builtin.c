@@ -146,7 +146,7 @@ xdr_write_cursor_init(
 
 } /* xdr_write_cursor_init */
 
-static FORCE_INLINE void
+static FORCE_INLINE int WARN_UNUSED_RESULT
 xdr_write_cursor_flush(struct xdr_write_cursor *cursor)
 {
     xdr_iovec *iov;
@@ -154,7 +154,7 @@ xdr_write_cursor_flush(struct xdr_write_cursor *cursor)
     if (cursor->scratch_used) {
 
         if (unlikely(cursor->niov + 1 > cursor->maxiov)) {
-            abort();
+            return -1;
         }
 
         iov = &cursor->iov[cursor->niov++];
@@ -177,6 +177,7 @@ xdr_write_cursor_flush(struct xdr_write_cursor *cursor)
         cursor->scratch_used  = 0;
     }
 
+    return 0;
 } /* xdr_write_cursor_flush */
 
 static inline int
@@ -213,7 +214,7 @@ xdr_read_cursor_vector_extract(
     return bytes;
 } /* xdr_read_cursor_vector_extract */
 
-static inline void
+static inline int WARN_UNUSED_RESULT
 xdr_write_cursor_append(
     struct xdr_write_cursor *cursor,
     const void              *in,
@@ -222,12 +223,13 @@ xdr_write_cursor_append(
     unsigned int chunk;
 
     if (unlikely(cursor->scratch_used + bytes > cursor->scratch_size)) {
-        abort();
+        return -1;
     }
 
     memcpy(cursor->scratch_data + cursor->scratch_used, in, bytes);
 
     cursor->scratch_used += bytes;
+    return 0;
 } /* xdr_write_cursor_append */
 
 static inline int
@@ -253,7 +255,7 @@ xdr_read_cursor_vector_skip(
             cursor->offset     += chunk;
 
             if (done < bytes && cursor->cur == cursor->last) {
-                abort();
+                return -1;
             }
 
             if (cursor->iov_offset == xdr_iovec_len(cursor->cur)) {
@@ -315,19 +317,20 @@ __marshall_length_double(const double *v)
     return 8;
 } /* __marshall_length_double */
 
-static FORCE_INLINE void
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __marshall_uint32_t(
     const uint32_t          *v,
     struct xdr_write_cursor *cursor)
 {
     if (unlikely(cursor->scratch_used + 4 > cursor->scratch_size)) {
-        abort();
+        return -1;
     }
 
     *(uint32_t *) (cursor->scratch_data + cursor->scratch_used) = xdr_hton32(*v);
 
     cursor->scratch_used += 4;
 
+    return 0;
 } /* __marshall_uint32_t */
 
 static FORCE_INLINE int WARN_UNUSED_RESULT
@@ -362,18 +365,19 @@ __unmarshall_uint32_t_contig(
     return 4;
 } /* __unmarshall_uint32_t_contig */
 
-static FORCE_INLINE void
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __marshall_int32_t(
     const int32_t           *v,
     struct xdr_write_cursor *cursor)
 {
     if (unlikely(cursor->scratch_used + 4 > cursor->scratch_size)) {
-        abort();
+        return -1;
     }
 
     *(int32_t *) (cursor->scratch_data + cursor->scratch_used) = xdr_hton32(*v);
 
     cursor->scratch_used += 4;
+    return 0;
 } /* __marshall_int32_t */
 
 static FORCE_INLINE int WARN_UNUSED_RESULT
@@ -408,18 +412,19 @@ __unmarshall_int32_t_contig(
     return 4;
 } /* __unmarshall_int32_t_contig */
 
-static FORCE_INLINE void
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __marshall_uint64_t(
     const uint64_t          *v,
     struct xdr_write_cursor *cursor)
 {
     if (unlikely(cursor->scratch_used + 8 > cursor->scratch_size)) {
-        abort();
+        return -1;
     }
 
     *(uint64_t *) (cursor->scratch_data + cursor->scratch_used) = xdr_hton64(*v);
 
     cursor->scratch_used += 8;
+    return 0;
 } /* __marshall_uint64_t */
 
 static FORCE_INLINE int WARN_UNUSED_RESULT
@@ -454,18 +459,19 @@ __unmarshall_uint64_t_contig(
     return 8;
 } /* __unmarshall_uint64_t_contig */
 
-static FORCE_INLINE void
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __marshall_int64_t(
     const int64_t           *v,
     struct xdr_write_cursor *cursor)
 {
     if (unlikely(cursor->scratch_used + 8 > cursor->scratch_size)) {
-        abort();
+        return -1;
     }
 
     *(int64_t *) (cursor->scratch_data + cursor->scratch_used) = xdr_hton64(*v);
 
     cursor->scratch_used += 8;
+    return 0;
 } /* __marshall_int64_t */
 
 static FORCE_INLINE int WARN_UNUSED_RESULT
@@ -500,12 +506,12 @@ __unmarshall_int64_t_contig(
     return 8;
 } /* __unmarshall_int64_t_contig */
 
-static FORCE_INLINE void
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __marshall_float(
     const float             *v,
     struct xdr_write_cursor *cursor)
 {
-    xdr_write_cursor_append(cursor, v, 4);
+    return xdr_write_cursor_append(cursor, v, 4);
 } /* __marshall_float */
 
 static FORCE_INLINE int WARN_UNUSED_RESULT
@@ -529,12 +535,12 @@ __unmarshall_float_contig(
     return 4;
 } /* __unmarshall_float_contig */
 
-static FORCE_INLINE void
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __marshall_double(
     const double            *v,
     struct xdr_write_cursor *cursor)
 {
-    xdr_write_cursor_append(cursor, v, 8);
+    return xdr_write_cursor_append(cursor, v, 8);
 } /* __marshall_double */
 
 static FORCE_INLINE int WARN_UNUSED_RESULT
@@ -558,23 +564,35 @@ __unmarshall_double_contig(
     return 8;
 } /* __unmarshall_double_contig */
 
-static FORCE_INLINE void
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __marshall_xdr_string(
     const xdr_string        *str,
     struct xdr_write_cursor *cursor)
 {
     const uint32_t zero = 0;
     int            pad;
+    int            rc;
 
-    __marshall_uint32_t(&str->len, cursor);
+    rc = __marshall_uint32_t(&str->len, cursor);
+    if (unlikely(rc < 0)) {
+        return rc;
+    }
 
-    xdr_write_cursor_append(cursor, str->str, str->len);
+    rc = xdr_write_cursor_append(cursor, str->str, str->len);
+    if (unlikely(rc < 0)) {
+        return rc;
+    }
 
     pad = (4 - (str->len & 0x3)) & 0x3;
 
     if (pad) {
-        xdr_write_cursor_append(cursor, &zero, pad);
+        rc = xdr_write_cursor_append(cursor, &zero, pad);
+        if (unlikely(rc < 0)) {
+            return rc;
+        }
     }
+
+    return 0;
 } /* __marshall_xdr_string */
 
 static FORCE_INLINE int WARN_UNUSED_RESULT
@@ -740,7 +758,7 @@ __unmarshall_opaque_fixed_contig(
     return size + pad;
 } /* __unmarshall_opaque_fixed_contig */
 
-static FORCE_INLINE void
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __marshall_opaque(
     const xdr_opaque        *v,
     uint32_t                 bound,
@@ -749,18 +767,29 @@ __marshall_opaque(
     int      rc, pad;
     uint32_t zero = 0;
 
-    __marshall_uint32_t(&v->len, cursor);
-    xdr_write_cursor_append(cursor, v->data, v->len);
+    rc = __marshall_uint32_t(&v->len, cursor);
+    if (unlikely(rc < 0)) {
+        return rc;
+    }
+
+    rc = xdr_write_cursor_append(cursor, v->data, v->len);
+    if (unlikely(rc < 0)) {
+        return rc;
+    }
 
     pad = (4 - (v->len & 0x3)) & 0x3;
 
     if (pad) {
-        xdr_write_cursor_append(cursor, &zero, pad);
+        rc = xdr_write_cursor_append(cursor, &zero, pad);
+        if (unlikely(rc < 0)) {
+            return rc;
+        }
     }
 
+    return 0;
 } /* __marshall_opaque */
 
-static FORCE_INLINE void
+static FORCE_INLINE int WARN_UNUSED_RESULT
 __marshall_opaque_zerocopy(
     const xdr_iovecr        *v,
     struct xdr_write_cursor *cursor)
@@ -768,8 +797,12 @@ __marshall_opaque_zerocopy(
     const uint32_t zero = 0;
     xdr_iovec     *iov;
     int            i, pad, left = v->length;
+    int            rc;
 
-    __marshall_uint32_t(&v->length, cursor);
+    rc = __marshall_uint32_t(&v->length, cursor);
+    if (unlikely(rc < 0)) {
+        return rc;
+    }
 
 #if EVPL_RPC2
     if (cursor->rdma_chunk && v->length <= cursor->rdma_chunk->max_length) {
@@ -777,16 +810,19 @@ __marshall_opaque_zerocopy(
         cursor->rdma_chunk->niov         = v->niov;
         cursor->rdma_chunk->length       = v->length;
         cursor->rdma_chunk->xdr_position = cursor->scratch_used - cursor->scratch_reserved;
-        return;
+        return 0;
     }
  #endif /* if EVPL_RPC2 */
 
-    xdr_write_cursor_flush(cursor);
+    rc = xdr_write_cursor_flush(cursor);
+    if (unlikely(rc < 0)) {
+        return rc;
+    }
 
     for (i = 0; i < v->niov && left; ++i) {
 
         if (unlikely(cursor->niov + 1 > cursor->maxiov)) {
-            abort();
+            return -1;
         }
 
         iov = &cursor->iov[cursor->niov++];
@@ -803,7 +839,7 @@ __marshall_opaque_zerocopy(
     }
 
     if (unlikely(left)) {
-        abort();
+        return -1;
     }
 
     cursor->total += v->length;
@@ -811,8 +847,13 @@ __marshall_opaque_zerocopy(
     pad = (4 - (v->length & 0x3)) & 0x3;
 
     if (pad) {
-        xdr_write_cursor_append(cursor, &zero, pad);
+        rc = xdr_write_cursor_append(cursor, &zero, pad);
+        if (unlikely(rc < 0)) {
+            return rc;
+        }
     }
+
+    return 0;
 } /* __marshall_opaque_zerocopy */
 
 static FORCE_INLINE int WARN_UNUSED_RESULT
