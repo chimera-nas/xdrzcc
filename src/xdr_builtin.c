@@ -224,8 +224,6 @@ xdr_write_cursor_append(
     const void              *in,
     unsigned int             bytes)
 {
-    unsigned int chunk;
-
     if (unlikely(cursor->scratch_used + bytes > cursor->scratch_size)) {
         return -1;
     }
