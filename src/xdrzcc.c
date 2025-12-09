@@ -1100,8 +1100,6 @@ emit_program(
     fprintf(source, "    void *callback_fn,\n");
     fprintf(source, "    void *callback_private_data)\n");
     fprintf(source, "{\n");
-    fprintf(source, "    struct %s *prog = msg->program->program_data;\n",
-            version->name);
     fprintf(source, "    int len;\n");
     fprintf(source, "    switch (msg->proc) {\n");
 
@@ -1231,10 +1229,10 @@ emit_program(
         fprintf(source, "{\n");
         fprintf(source, "    struct evpl_iovec iov, *msg_iov;\n");
         fprintf(source, "    int msg_niov = 260, len;\n");
-        fprintf(source, "    xdr_dbuf *dbuf = (xdr_dbuf *) conn->thread_dbuf;\n");
 
         if (has_args) {
-            fprintf(source, "struct evpl_rpc2_rdma_chunk rdma_chunk;\n");
+            fprintf(source, "    xdr_dbuf *dbuf = (xdr_dbuf *) conn->thread_dbuf;\n");
+            fprintf(source, "    struct evpl_rpc2_rdma_chunk rdma_chunk;\n");
             fprintf(source, "    rdma_chunk.length = 0;\n");
             fprintf(source, "    rdma_chunk.max_length = conn->rdma && ddp ? UINT32_MAX : 0;\n");
             fprintf(source, "    rdma_chunk.niov = 0;\n");
@@ -1266,7 +1264,7 @@ emit_program(
             fprintf(source, "    niov = evpl_iovec_alloc(evpl, program->reserve, 8, 1, &iov);\n");
 
             fprintf(source, "    evpl_rpc2_call(evpl, program, conn, %d, "
-                    "&iov, 1, program->reserve,NULL, max_rdma_write_chunk, max_rdma_reply_chunk, callback, callback_private_data);\n",
+                    "&iov, niov, program->reserve,NULL, max_rdma_write_chunk, max_rdma_reply_chunk, callback, callback_private_data);\n",
                     functionp->id);
         }
 
