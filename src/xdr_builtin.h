@@ -119,6 +119,49 @@ xdr_dbuf_opaque_copy(
     return 0;
 } // xdr_dbuf_opaque_copy
 
+static FORCE_INLINE int WARN_UNUSED_RESULT
+xdr_dbuf_alloc_string(
+    xdr_string *string,
+    const char *istr,
+    uint32_t    ilen,
+    xdr_dbuf   *dbuf)
+{
+    string->len = ilen;
+    string->str = xdr_dbuf_alloc_space(ilen, dbuf);
+    if (unlikely(string->str == NULL)) {
+        return -1;
+    }
+    memcpy(string->str, istr, ilen);
+    return 0;
+} // xdr_dbuf_alloc_string
+
+static FORCE_INLINE int WARN_UNUSED_RESULT
+__xdr_dbuf_alloc_array(
+    void    **datap,
+    uint32_t *nump,
+    uint32_t  num,
+    uint32_t  element_size,
+    xdr_dbuf *dbuf)
+{
+    *nump = num;
+
+    *datap = xdr_dbuf_alloc_space(num * element_size, dbuf);
+
+    if (unlikely(*datap == NULL)) {
+        return -1;
+    }
+
+    return 0;
+} // xdr_dbuf_alloc_array
+
+#define xdr_dbuf_alloc_array(structp, member, num_elements, dbuf) \
+        __xdr_dbuf_alloc_array((void **) &(structp)->member, \
+                               &(structp)->num_ ## member, \
+                               num_elements, \
+                               sizeof(*(structp)->member), \
+                               dbuf)
+
+
 #define xdr_set_str_static(structp, member, istr, ilen) \
         {                                                   \
             (structp)->member.len = (ilen);                 \
