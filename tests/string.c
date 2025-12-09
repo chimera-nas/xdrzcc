@@ -23,22 +23,25 @@ main(
     dbuf = xdr_dbuf_alloc(16 * 1024);
 
     msg1.string1.len = 7;
-    msg1.string1.str = (char *)xdr_dbuf_alloc_space(7 + 1, dbuf);
+    msg1.string1.str = (char *) xdr_dbuf_alloc_space(7 + 1, dbuf);
     if (msg1.string1.str == NULL) {
+        xdr_dbuf_free(dbuf);
         return 1;
     }
     memcpy(msg1.string1.str, "1234567", 7 + 1);
 
     msg1.string2.len = 4;
-    msg1.string2.str = (char *)xdr_dbuf_alloc_space(4 + 1, dbuf);
+    msg1.string2.str = (char *) xdr_dbuf_alloc_space(4 + 1, dbuf);
     if (msg1.string2.str == NULL) {
+        xdr_dbuf_free(dbuf);
         return 1;
     }
     memcpy(msg1.string2.str, "1234", 4 + 1);
 
     msg1.string3.len = 9;
-    msg1.string3.str = (char *)xdr_dbuf_alloc_space(9 + 1, dbuf);
+    msg1.string3.str = (char *) xdr_dbuf_alloc_space(9 + 1, dbuf);
     if (msg1.string3.str == NULL) {
+        xdr_dbuf_free(dbuf);
         return 1;
     }
     memcpy(msg1.string3.str, "123456789", 9 + 1);

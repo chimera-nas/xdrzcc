@@ -23,8 +23,9 @@ main(
     dbuf = xdr_dbuf_alloc(16 * 1024);
 
     msg1.num_value = 16;
-    msg1.value = xdr_dbuf_alloc_space(16 * sizeof(*msg1.value), dbuf);
+    msg1.value     = xdr_dbuf_alloc_space(16 * sizeof(*msg1.value), dbuf);
     if (msg1.value == NULL) {
+        xdr_dbuf_free(dbuf);
         return 1;
     }
 
