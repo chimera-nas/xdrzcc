@@ -907,6 +907,20 @@ emit_length_union(
     fprintf(source, "}\n\n");
 } /* emit_length_union */
 
+/* Helper function to format type for function parameter (adds "struct" for non-builtin types) */
+static void
+format_param_type(
+    char            *buf,
+    size_t           bufsize,
+    struct xdr_type *type)
+{
+    if (type->builtin) {
+        snprintf(buf, bufsize, "%s", type->name);
+    } else {
+        snprintf(buf, bufsize, "struct %s", type->name);
+    }
+} /* format_param_type */
+
 void
 emit_program_header(
     FILE               *header,
@@ -914,6 +928,8 @@ emit_program_header(
     struct xdr_version *version)
 {
     struct xdr_function *functionp;
+    char                 call_type_buf[256];
+    char                 reply_type_buf[256];
 
     fprintf(header, "#include \"evpl/evpl_rpc2_program.h\"\n");
 
@@ -922,29 +938,31 @@ emit_program_header(
 
     DL_FOREACH(version->functions, functionp)
     {
+        format_param_type(call_type_buf, sizeof(call_type_buf), functionp->call_type);
+        format_param_type(reply_type_buf, sizeof(reply_type_buf), functionp->reply_type);
 
         if (strcmp(functionp->call_type->name, "void")) {
             if (strcmp(functionp->reply_type->name, "void")) {
                 fprintf(header,
-                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, struct %s *, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, struct %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, %s *, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
                         functionp->name,
-                        functionp->call_type->name,
-                        functionp->reply_type->name
+                        call_type_buf,
+                        reply_type_buf
                         );
             } else {
                 fprintf(header,
-                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, struct %s *, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, int status, void *callback_private_data), void *callback_private_data);\n",
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, %s *, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, int status, void *callback_private_data), void *callback_private_data);\n",
                         functionp->name,
-                        functionp->call_type->name
+                        call_type_buf
                         );
             }
 
         } else {
             if (strcmp(functionp->reply_type->name, "void")) {
                 fprintf(header,
-                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, struct %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
                         functionp->name,
-                        functionp->reply_type->name
+                        reply_type_buf
                         );
             } else {
                 fprintf(header,
@@ -957,9 +975,9 @@ emit_program_header(
 
         if (strcmp(functionp->reply_type->name, "void")) {
             fprintf(header,
-                    "   int WARN_UNUSED_RESULT (*send_reply_%s)(struct evpl *evpl, struct %s *, void *);\n",
+                    "   int WARN_UNUSED_RESULT (*send_reply_%s)(struct evpl *evpl, %s *, void *);\n",
                     functionp->name,
-                    functionp->reply_type->name);
+                    reply_type_buf);
 
         } else {
             fprintf(header,
@@ -969,9 +987,9 @@ emit_program_header(
 
         if (strcmp(functionp->call_type->name, "void")) {
             fprintf(header,
-                    "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, struct %s *, struct evpl_rpc2_msg *, void *);\n",
+                    "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, %s *, struct evpl_rpc2_msg *, void *);\n",
                     functionp->name,
-                    functionp->call_type->name);
+                    call_type_buf);
         } else {
             fprintf(header,
                     "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, struct evpl_rpc2_msg *, void *);\n",
@@ -981,8 +999,8 @@ emit_program_header(
         if (strcmp(functionp->reply_type->name, "void")) {
             fprintf(header,
                     "    void (*recv_reply_%s)(struct evpl *evpl, "
-                    "struct %s *reply, int status, void *callback_private_data);\n",
-                    functionp->name, functionp->reply_type->name);
+                    "%s *reply, int status, void *callback_private_data);\n",
+                    functionp->name, reply_type_buf);
         } else {
             fprintf(header,
                     "    void (*recv_reply_%s)(struct evpl *evpl, "
@@ -1006,6 +1024,8 @@ emit_program(
 {
     struct xdr_function *functionp;
     int                  maxproc = 0;
+    char                 call_type_buf[256];
+    char                 reply_type_buf[256];
 
     fprintf(source, "#include <evpl/evpl.h>\n");
     fprintf(source, "#include \"evpl/evpl_rpc2_program.h\"\n");
@@ -1021,6 +1041,66 @@ emit_program(
     }
 
     fprintf(source, "};\n\n");
+
+    /* Generate RPC2 marshall/unmarshall wrappers for builtin scalar types that need them */
+    for (functionp = version->functions; functionp != NULL; functionp = functionp->next) {
+        struct xdr_type *types[2] = {functionp->call_type, functionp->reply_type};
+        for (int i = 0; i < 2; i++) {
+            struct xdr_type *type = types[i];
+            /* Only generate wrappers for builtin scalars (not string/opaque which have their own) */
+            if (type->builtin && strcmp(type->name, "void") != 0 &&
+                strcmp(type->name, "xdr_string") != 0 && strcmp(type->name, "xdr_iovec") != 0) {
+                /* Check if we've already generated wrappers for this type */
+                static const char *generated_types[32] = {NULL};
+                static int num_generated = 0;
+                int already_generated = 0;
+                for (int j = 0; j < num_generated; j++) {
+                    if (generated_types[j] && strcmp(generated_types[j], type->name) == 0) {
+                        already_generated = 1;
+                        break;
+                    }
+                }
+                if (!already_generated && num_generated < 32) {
+                    generated_types[num_generated++] = type->name;
+
+                    /* Generate unmarshall wrapper for RPC2 */
+                    fprintf(source, "static int unmarshall_%s(\n", type->name);
+                    fprintf(source, "    %s *out,\n", type->name);
+                    fprintf(source, "    const xdr_iovec *iov,\n");
+                    fprintf(source, "    int niov,\n");
+                    fprintf(source, "    struct evpl_rpc2_rdma_chunk *rdma_chunk,\n");
+                    fprintf(source, "    xdr_dbuf *dbuf)\n");
+                    fprintf(source, "{\n");
+                    fprintf(source, "    struct xdr_read_cursor cursor;\n");
+                    fprintf(source, "    if (niov == 1) {\n");
+                    fprintf(source, "        xdr_read_cursor_contig_init(&cursor, iov, rdma_chunk);\n");
+                    fprintf(source, "        return __unmarshall_%s_contig(out, &cursor, dbuf);\n", type->name);
+                    fprintf(source, "    } else {\n");
+                    fprintf(source, "        xdr_read_cursor_vector_init(&cursor, iov, niov, rdma_chunk);\n");
+                    fprintf(source, "        return __unmarshall_%s_vector(out, &cursor, dbuf);\n", type->name);
+                    fprintf(source, "    }\n");
+                    fprintf(source, "}\n\n");
+
+                    /* Generate marshall wrapper for RPC2 */
+                    fprintf(source, "static int marshall_%s(\n", type->name);
+                    fprintf(source, "    const %s *out,\n", type->name);
+                    fprintf(source, "    xdr_iovec *iov_in,\n");
+                    fprintf(source, "    xdr_iovec *iov_out,\n");
+                    fprintf(source, "    int *niov_out,\n");
+                    fprintf(source, "    struct evpl_rpc2_rdma_chunk *rdma_chunk,\n");
+                    fprintf(source, "    int out_offset)\n");
+                    fprintf(source, "{\n");
+                    fprintf(source, "    struct xdr_write_cursor cursor;\n");
+                    fprintf(source, "    xdr_write_cursor_init(&cursor, iov_in, iov_out, *niov_out, rdma_chunk, out_offset);\n");
+                    fprintf(source, "    if (unlikely(__marshall_%s(out, &cursor) < 0)) return -1;\n", type->name);
+                    fprintf(source, "    if (unlikely(xdr_write_cursor_flush(&cursor) < 0)) return -1;\n");
+                    fprintf(source, "    *niov_out = cursor.niov;\n");
+                    fprintf(source, "    return cursor.total;\n");
+                    fprintf(source, "}\n\n");
+                }
+            }
+        }
+    }
 
     fprintf(source, "static int\n");
     fprintf(source, "call_dispatch_%s(\n", version->name);
@@ -1044,6 +1124,8 @@ emit_program(
             maxproc = functionp->id;
         }
 
+        format_param_type(call_type_buf, sizeof(call_type_buf), functionp->call_type);
+
         fprintf(source, "    case %d:\n", functionp->id);
 
         /* Check if the function is implemented */
@@ -1055,8 +1137,8 @@ emit_program(
         /* Call has an argument */
         if (strcmp(functionp->call_type->name, "void")) {
             /* We will unmarshall argument into provided buffer */
-            fprintf(source, "        struct %s *%s_arg;\n",
-                    functionp->call_type->name,
+            fprintf(source, "        %s *%s_arg;\n",
+                    call_type_buf,
                     functionp->name);
             fprintf(source, "        %s_arg = xdr_dbuf_alloc_space(sizeof(*%s_arg), msg->dbuf);\n",
                     functionp->name, functionp->name);
@@ -1110,14 +1192,16 @@ emit_program(
             maxproc = functionp->id;
         }
 
+        format_param_type(reply_type_buf, sizeof(reply_type_buf), functionp->reply_type);
+
         fprintf(source, "    case %d:\n", functionp->id);
 
         /* Call has an argument */
         if (strcmp(functionp->reply_type->name, "void")) {
             fprintf(source, "        {\n");
             /* We will unmarshall argument into provided buffer */
-            fprintf(source, "        struct %s *%s_arg;\n",
-                    functionp->reply_type->name,
+            fprintf(source, "        %s *%s_arg;\n",
+                    reply_type_buf,
                     functionp->name);
             fprintf(source, "        %s_arg = xdr_dbuf_alloc_space(sizeof(*%s_arg), msg->dbuf);\n",
                     functionp->name, functionp->name);
@@ -1131,8 +1215,8 @@ emit_program(
 
             /* Then make the call */
             fprintf(source,
-                    " void (*callback_%s)(struct evpl *evpl, struct %s *reply, int status, void *callback_private_data) = callback_fn;\n",
-                    functionp->name, functionp->reply_type->name);
+                    " void (*callback_%s)(struct evpl *evpl, %s *reply, int status, void *callback_private_data) = callback_fn;\n",
+                    functionp->name, reply_type_buf);
             fprintf(source,
                     "        callback_%s(evpl, %s_arg, 0, callback_private_data);\n",
                     functionp->name, functionp->name);
@@ -1158,11 +1242,12 @@ emit_program(
 
     for (functionp = version->functions; functionp != NULL; functionp =
              functionp->next) {
+        format_param_type(reply_type_buf, sizeof(reply_type_buf), functionp->reply_type);
 
         if (strcmp(functionp->reply_type->name, "void")) {
             fprintf(source,
-                    "static int send_reply_%s(struct evpl *evpl, struct %s *arg, void *private_data)\n",
-                    functionp->name, functionp->reply_type->name);
+                    "static int send_reply_%s(struct evpl *evpl, %s *arg, void *private_data)\n",
+                    functionp->name, reply_type_buf);
             fprintf(source, "{\n");
             fprintf(source, "    struct evpl_rpc2_msg *msg = private_data;\n");
             fprintf(source, "    struct evpl_iovec iov, *msg_iov;\n");
@@ -1201,6 +1286,9 @@ emit_program(
         int         has_args       = strcmp(arg_type, "void") != 0;
         int         has_reply_args = strcmp(functionp->reply_type->name, "void") != 0;
 
+        format_param_type(call_type_buf, sizeof(call_type_buf), functionp->call_type);
+        format_param_type(reply_type_buf, sizeof(reply_type_buf), functionp->reply_type);
+
         fprintf(source, "static void\n");
         fprintf(source, "send_call_%s(\n", functionp->name);
         fprintf(source, "    struct evpl_rpc2_program *program,\n");
@@ -1208,7 +1296,7 @@ emit_program(
         fprintf(source, "    struct evpl_rpc2_conn *conn,\n");
 
         if (has_args) {
-            fprintf(source, "    struct %s *args,\n", arg_type);
+            fprintf(source, "    %s *args,\n", call_type_buf);
         }
 
         fprintf(source, "    int ddp,\n");
@@ -1217,8 +1305,8 @@ emit_program(
 
         if (has_reply_args) {
             fprintf(source,
-                    "    void (*callback)(struct evpl *evpl, struct %s *reply, int status, void *callback_private_data),\n",
-                    functionp->reply_type->name);
+                    "    void (*callback)(struct evpl *evpl, %s *reply, int status, void *callback_private_data),\n",
+                    reply_type_buf);
         } else {
             fprintf(source, "    void (*callback)(struct evpl *evpl, int status, void *callback_private_data),\n");
         }

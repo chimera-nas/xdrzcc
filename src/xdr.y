@@ -447,7 +447,7 @@ type:
     | BOOL
     {
         $$ = xdr_alloc(sizeof(*$$));
-        $$->name = "uint32_t";
+        $$->name = "xdr_bool";
         $$->builtin = 1;
     }
     | STRING

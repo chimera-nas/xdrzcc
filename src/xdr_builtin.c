@@ -290,6 +290,12 @@ __marshall_length_uint32_t(const uint32_t *v)
 } /* __marshall_length_uint32_t */
 
 static FORCE_INLINE uint32_t
+__marshall_length_xdr_bool(const xdr_bool *v)
+{
+    return 4;
+} /* __marshall_length_xdr_bool */
+
+static FORCE_INLINE uint32_t
 __marshall_length_int32_t(const int32_t *v)
 {
     return 4;
@@ -370,6 +376,49 @@ __unmarshall_uint32_t_contig(
     cursor->offset     += 4;
     return 4;
 } /* __unmarshall_uint32_t_contig */
+
+static FORCE_INLINE int WARN_UNUSED_RESULT
+__marshall_xdr_bool(
+    const xdr_bool          *v,
+    struct xdr_write_cursor *cursor)
+{
+    uint32_t val = *v ? 1 : 0;
+
+    return __marshall_uint32_t(&val, cursor);
+} /* __marshall_xdr_bool */
+
+static FORCE_INLINE int WARN_UNUSED_RESULT
+__unmarshall_xdr_bool_vector(
+    xdr_bool               *v,
+    struct xdr_read_cursor *cursor,
+    xdr_dbuf               *dbuf)
+{
+    int rc;
+
+    rc = __unmarshall_uint32_t_vector(v, cursor, dbuf);
+
+    if (unlikely(rc < 0)) {
+        return rc;
+    }
+    return rc;
+} /* __unmarshall_xdr_bool_vector */
+
+static FORCE_INLINE int WARN_UNUSED_RESULT
+__unmarshall_xdr_bool_contig(
+    xdr_bool               *v,
+    struct xdr_read_cursor *cursor,
+    xdr_dbuf               *dbuf)
+{
+    int rc;
+
+    rc = __unmarshall_uint32_t_contig(v, cursor, dbuf);
+
+    if (unlikely(rc < 0)) {
+        return rc;
+    }
+
+    return rc;
+} /* __unmarshall_xdr_bool_contig */
 
 static FORCE_INLINE int WARN_UNUSED_RESULT
 __marshall_int32_t(

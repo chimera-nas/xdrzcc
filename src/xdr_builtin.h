@@ -11,6 +11,8 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
+typedef uint32_t xdr_bool;
+
 #ifndef WARN_UNUSED_RESULT
 #define WARN_UNUSED_RESULT __attribute__((warn_unused_result))
 #endif /* ifndef WARN_UNUSED_RESULT */
