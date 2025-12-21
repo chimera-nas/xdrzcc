@@ -921,6 +921,22 @@ format_param_type(
     }
 } /* format_param_type */
 
+/* Check if type is a builtin scalar that should be returned by value in callbacks */
+static int
+is_byvalue_builtin(struct xdr_type *type)
+{
+    if (!type->builtin) {
+        return 0;
+    }
+    /* These are passed by reference even though they're builtin */
+    if (strcmp(type->name, "void") == 0 ||
+        strcmp(type->name, "xdr_string") == 0 ||
+        strcmp(type->name, "xdr_iovec") == 0) {
+        return 0;
+    }
+    return 1;
+} /* is_byvalue_builtin */
+
 void
 emit_program_header(
     FILE               *header,
@@ -942,28 +958,49 @@ emit_program_header(
         format_param_type(reply_type_buf, sizeof(reply_type_buf), functionp->reply_type);
 
         if (strcmp(functionp->call_type->name, "void")) {
+            const char *call_ptr = is_byvalue_builtin(functionp->call_type) ? "" : " *";
             if (strcmp(functionp->reply_type->name, "void")) {
-                fprintf(header,
-                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, %s *, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
-                        functionp->name,
-                        call_type_buf,
-                        reply_type_buf
-                        );
+                if (is_byvalue_builtin(functionp->reply_type)) {
+                    fprintf(header,
+                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, %s%s, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, %s reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                            functionp->name,
+                            call_type_buf,
+                            call_ptr,
+                            reply_type_buf
+                            );
+                } else {
+                    fprintf(header,
+                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, %s%s, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                            functionp->name,
+                            call_type_buf,
+                            call_ptr,
+                            reply_type_buf
+                            );
+                }
             } else {
                 fprintf(header,
-                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, %s *, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, int status, void *callback_private_data), void *callback_private_data);\n",
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, %s%s, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, int status, void *callback_private_data), void *callback_private_data);\n",
                         functionp->name,
-                        call_type_buf
+                        call_type_buf,
+                        call_ptr
                         );
             }
 
         } else {
             if (strcmp(functionp->reply_type->name, "void")) {
-                fprintf(header,
-                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
-                        functionp->name,
-                        reply_type_buf
-                        );
+                if (is_byvalue_builtin(functionp->reply_type)) {
+                    fprintf(header,
+                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, %s reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                            functionp->name,
+                            reply_type_buf
+                            );
+                } else {
+                    fprintf(header,
+                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                            functionp->name,
+                            reply_type_buf
+                            );
+                }
             } else {
                 fprintf(header,
                         "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, int status, void *callback_private_data), void *callback_private_data);\n",
@@ -974,10 +1011,17 @@ emit_program_header(
         }
 
         if (strcmp(functionp->reply_type->name, "void")) {
-            fprintf(header,
-                    "   int WARN_UNUSED_RESULT (*send_reply_%s)(struct evpl *evpl, %s *, void *);\n",
-                    functionp->name,
-                    reply_type_buf);
+            if (is_byvalue_builtin(functionp->reply_type)) {
+                fprintf(header,
+                        "   int WARN_UNUSED_RESULT (*send_reply_%s)(struct evpl *evpl, %s, void *);\n",
+                        functionp->name,
+                        reply_type_buf);
+            } else {
+                fprintf(header,
+                        "   int WARN_UNUSED_RESULT (*send_reply_%s)(struct evpl *evpl, %s *, void *);\n",
+                        functionp->name,
+                        reply_type_buf);
+            }
 
         } else {
             fprintf(header,
@@ -986,10 +1030,17 @@ emit_program_header(
         }
 
         if (strcmp(functionp->call_type->name, "void")) {
-            fprintf(header,
-                    "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, %s *, struct evpl_rpc2_msg *, void *);\n",
-                    functionp->name,
-                    call_type_buf);
+            if (is_byvalue_builtin(functionp->call_type)) {
+                fprintf(header,
+                        "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, %s, struct evpl_rpc2_msg *, void *);\n",
+                        functionp->name,
+                        call_type_buf);
+            } else {
+                fprintf(header,
+                        "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, %s *, struct evpl_rpc2_msg *, void *);\n",
+                        functionp->name,
+                        call_type_buf);
+            }
         } else {
             fprintf(header,
                     "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, struct evpl_rpc2_msg *, void *);\n",
@@ -997,10 +1048,17 @@ emit_program_header(
         }
 
         if (strcmp(functionp->reply_type->name, "void")) {
-            fprintf(header,
-                    "    void (*recv_reply_%s)(struct evpl *evpl, "
-                    "%s *reply, int status, void *callback_private_data);\n",
-                    functionp->name, reply_type_buf);
+            if (is_byvalue_builtin(functionp->reply_type)) {
+                fprintf(header,
+                        "    void (*recv_reply_%s)(struct evpl *evpl, "
+                        "%s reply, int status, void *callback_private_data);\n",
+                        functionp->name, reply_type_buf);
+            } else {
+                fprintf(header,
+                        "    void (*recv_reply_%s)(struct evpl *evpl, "
+                        "%s *reply, int status, void *callback_private_data);\n",
+                        functionp->name, reply_type_buf);
+            }
         } else {
             fprintf(header,
                     "    void (*recv_reply_%s)(struct evpl *evpl, "
@@ -1150,10 +1208,16 @@ emit_program(
             fprintf(source, "        if (unlikely(len != length)) return 2;\n");
             fprintf(source, "        if (len < 0) return 2;\n");
 
-            /* Then make the call */
-            fprintf(source,
-                    "        prog->recv_call_%s(evpl, conn, %s_arg, msg, private_data);\n",
-                    functionp->name, functionp->name);
+            /* Then make the call - builtin scalars are passed by value */
+            if (is_byvalue_builtin(functionp->call_type)) {
+                fprintf(source,
+                        "        prog->recv_call_%s(evpl, conn, *%s_arg, msg, private_data);\n",
+                        functionp->name, functionp->name);
+            } else {
+                fprintf(source,
+                        "        prog->recv_call_%s(evpl, conn, %s_arg, msg, private_data);\n",
+                        functionp->name, functionp->name);
+            }
         } else {
             /* No argument, just make the call */
             fprintf(source,
@@ -1213,13 +1277,22 @@ emit_program(
             fprintf(source, "        if (unlikely(len != length)) return 2;\n");
             fprintf(source, "        if (len < 0) return 2;\n");
 
-            /* Then make the call */
-            fprintf(source,
-                    " void (*callback_%s)(struct evpl *evpl, %s *reply, int status, void *callback_private_data) = callback_fn;\n",
-                    functionp->name, reply_type_buf);
-            fprintf(source,
-                    "        callback_%s(evpl, %s_arg, 0, callback_private_data);\n",
-                    functionp->name, functionp->name);
+            /* Then make the call - builtin scalars are passed by value */
+            if (is_byvalue_builtin(functionp->reply_type)) {
+                fprintf(source,
+                        " void (*callback_%s)(struct evpl *evpl, %s reply, int status, void *callback_private_data) = callback_fn;\n",
+                        functionp->name, reply_type_buf);
+                fprintf(source,
+                        "        callback_%s(evpl, *%s_arg, 0, callback_private_data);\n",
+                        functionp->name, functionp->name);
+            } else {
+                fprintf(source,
+                        " void (*callback_%s)(struct evpl *evpl, %s *reply, int status, void *callback_private_data) = callback_fn;\n",
+                        functionp->name, reply_type_buf);
+                fprintf(source,
+                        "        callback_%s(evpl, %s_arg, 0, callback_private_data);\n",
+                        functionp->name, functionp->name);
+            }
             fprintf(source, "        }\n");
         } else {
             fprintf(source,
@@ -1245,9 +1318,15 @@ emit_program(
         format_param_type(reply_type_buf, sizeof(reply_type_buf), functionp->reply_type);
 
         if (strcmp(functionp->reply_type->name, "void")) {
-            fprintf(source,
-                    "static int send_reply_%s(struct evpl *evpl, %s *arg, void *private_data)\n",
-                    functionp->name, reply_type_buf);
+            if (is_byvalue_builtin(functionp->reply_type)) {
+                fprintf(source,
+                        "static int send_reply_%s(struct evpl *evpl, %s arg, void *private_data)\n",
+                        functionp->name, reply_type_buf);
+            } else {
+                fprintf(source,
+                        "static int send_reply_%s(struct evpl *evpl, %s *arg, void *private_data)\n",
+                        functionp->name, reply_type_buf);
+            }
             fprintf(source, "{\n");
             fprintf(source, "    struct evpl_rpc2_msg *msg = private_data;\n");
             fprintf(source, "    struct evpl_iovec iov, *msg_iov;\n");
@@ -1257,9 +1336,15 @@ emit_program(
             fprintf(source,
                     "    niov = evpl_iovec_reserve(evpl, 128*1024, 8, 1, &iov);\n");
             fprintf(source, "    if (unlikely(niov != 1)) return 1;\n");
-            fprintf(source,
-                    "    len = marshall_%s(arg, &iov, msg_iov, &msg_niov, &msg->write_chunk, msg->program->reserve);\n",
-                    functionp->reply_type->name);
+            if (is_byvalue_builtin(functionp->reply_type)) {
+                fprintf(source,
+                        "    len = marshall_%s(&arg, &iov, msg_iov, &msg_niov, &msg->write_chunk, msg->program->reserve);\n",
+                        functionp->reply_type->name);
+            } else {
+                fprintf(source,
+                        "    len = marshall_%s(arg, &iov, msg_iov, &msg_niov, &msg->write_chunk, msg->program->reserve);\n",
+                        functionp->reply_type->name);
+            }
             fprintf(source, "    if (unlikely(len < 0)) return 2;\n");
             fprintf(source, "    xdr_iovec_set_len(&iov, len + msg->program->reserve);\n");
             fprintf(source,
@@ -1296,7 +1381,11 @@ emit_program(
         fprintf(source, "    struct evpl_rpc2_conn *conn,\n");
 
         if (has_args) {
-            fprintf(source, "    %s *args,\n", call_type_buf);
+            if (is_byvalue_builtin(functionp->call_type)) {
+                fprintf(source, "    %s args,\n", call_type_buf);
+            } else {
+                fprintf(source, "    %s *args,\n", call_type_buf);
+            }
         }
 
         fprintf(source, "    int ddp,\n");
@@ -1304,9 +1393,15 @@ emit_program(
         fprintf(source, "    int max_rdma_reply_chunk,\n");
 
         if (has_reply_args) {
-            fprintf(source,
-                    "    void (*callback)(struct evpl *evpl, %s *reply, int status, void *callback_private_data),\n",
-                    reply_type_buf);
+            if (is_byvalue_builtin(functionp->reply_type)) {
+                fprintf(source,
+                        "    void (*callback)(struct evpl *evpl, %s reply, int status, void *callback_private_data),\n",
+                        reply_type_buf);
+            } else {
+                fprintf(source,
+                        "    void (*callback)(struct evpl *evpl, %s *reply, int status, void *callback_private_data),\n",
+                        reply_type_buf);
+            }
         } else {
             fprintf(source, "    void (*callback)(struct evpl *evpl, int status, void *callback_private_data),\n");
         }
@@ -1332,8 +1427,13 @@ emit_program(
             fprintf(source, "    }\n");
             fprintf(source, "    evpl_iovec_reserve(evpl, 128*1024, 8, 1, &iov);\n\n");
 
-            fprintf(source, "    len = marshall_%s(args, &iov, msg_iov, &msg_niov, "
-                    "&rdma_chunk, program->reserve);\n", arg_type);
+            if (is_byvalue_builtin(functionp->call_type)) {
+                fprintf(source, "    len = marshall_%s(&args, &iov, msg_iov, &msg_niov, "
+                        "&rdma_chunk, program->reserve);\n", arg_type);
+            } else {
+                fprintf(source, "    len = marshall_%s(args, &iov, msg_iov, &msg_niov, "
+                        "&rdma_chunk, program->reserve);\n", arg_type);
+            }
             fprintf(source, "    if (unlikely(len < 0)) {\n");
             fprintf(source, "        xdr_dbuf_free(dbuf);\n");
             fprintf(source, "        return;\n");
