@@ -33,6 +33,7 @@ char * xdr_strdup(const char *str);
 "uint64_t"      { column_num += yyleng; return UINT64; }
 "int64_t"       { column_num += yyleng; return INT64;  }
 "int"           { column_num += yyleng; return INT; }
+"long"          { column_num += yyleng; return LONG; }
 "unsigned"      { column_num += yyleng; return UNSIGNED; }
 "float"         { column_num += yyleng; return FLOAT; }
 "double"        { column_num += yyleng; return DOUBLE; }

@@ -55,7 +55,7 @@ void yyerror(const char *s) {
 
 %token <str> IDENTIFIER NUMBER
 %token UINT32 INT32 UINT64 INT64
-%token INT UNSIGNED FLOAT DOUBLE BOOL ENUM STRUCT TYPEDEF
+%token INT LONG UNSIGNED FLOAT DOUBLE BOOL ENUM STRUCT TYPEDEF
 %token VOID STRING OPAQUE ZCOPAQUE UNION SWITCH CASE DEFAULT CONST
 %token LBRACE RBRACE LPAREN RPAREN SEMICOLON COLON EQUALS
 %token LBRACKET RBRACKET STAR LANGLE RANGLE COMMA PROGRAM VERSION
@@ -420,6 +420,12 @@ type:
         $$->name = "int32_t";
         $$->builtin = 1;
     }
+    | LONG
+    {
+        $$ = xdr_alloc(sizeof(*$$));
+        $$->name = "int32_t";
+        $$->builtin = 1;
+    }
     | VOID
     {
         $$ = xdr_alloc(sizeof(*$$));
@@ -427,6 +433,12 @@ type:
         $$->builtin = 1;
     }
     | UNSIGNED INT
+    {
+        $$ = xdr_alloc(sizeof(*$$));
+        $$->name = "uint32_t";
+        $$->builtin = 1;
+    }
+    | UNSIGNED LONG
     {
         $$ = xdr_alloc(sizeof(*$$));
         $$->name = "uint32_t";
@@ -485,6 +497,12 @@ type:
 
     }
     | type LBRACKET NUMBER RBRACKET
+    {
+        $$ = $1;
+        $$->array = 1;
+        $$->array_size = $3;
+    }
+    | type LBRACKET IDENTIFIER RBRACKET
     {
         $$ = $1;
         $$->array = 1;
