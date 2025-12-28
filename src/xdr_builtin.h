@@ -196,7 +196,6 @@ typedef struct {
 
 #define xdr_iovec_move_private(out, in)
 #define xdr_iovec_copy_private(out, in)
-#define xdr_iovec_set_private_null(out)
 
 #endif /* ifdef XDR_CUSTOM_IOVEC */
 
