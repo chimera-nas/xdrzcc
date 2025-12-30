@@ -777,9 +777,9 @@ __unmarshall_opaque_fixed_vector(
             return -1;
         }
 
+        xdr_iovec_copy_private(&v->iov[v->niov], cursor->cur);
         xdr_iovec_set_data(&v->iov[v->niov], xdr_iovec_data(cursor->cur) +
                            cursor->iov_offset);
-        xdr_iovec_move_private(&v->iov[v->niov], cursor->cur);
 
         chunk = xdr_iovec_len(cursor->cur) - cursor->iov_offset;
 
@@ -830,9 +830,9 @@ __unmarshall_opaque_fixed_contig(
         return -1;
     }
 
+    xdr_iovec_copy_private(&v->iov[0], cursor->cur);
     xdr_iovec_set_data(&v->iov[0], (void *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset));
     xdr_iovec_set_len(&v->iov[0], size);
-    xdr_iovec_move_private(&v->iov[0], cursor->cur);
 
     cursor->iov_offset += size;
     cursor->offset     += size;
@@ -914,9 +914,7 @@ __marshall_opaque_zerocopy(
 
         iov = &cursor->iov[cursor->niov++];
 
-        xdr_iovec_set_data(iov, xdr_iovec_data(&v->iov[i]));
         xdr_iovec_move_private(iov, &v->iov[i]);
-        xdr_iovec_set_len(iov, xdr_iovec_len(&v->iov[i]));
 
         if (xdr_iovec_len(iov) > left) {
             xdr_iovec_set_len(iov, left);
