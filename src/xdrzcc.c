@@ -1398,7 +1398,7 @@ emit_program(
             fprintf(source,
                     "    evpl_iovec_commit(evpl, 0, &iov, 1);\n");
             fprintf(source,
-                    "    evpl_iovec_release(&iov);\n");
+                    "    evpl_iovec_release(evpl, &iov);\n");
             fprintf(source,
                     "    msg->program->send_reply_dispatch(evpl, msg, msg_iov, msg_niov, len);\n");
         } else {
@@ -1409,7 +1409,7 @@ emit_program(
             fprintf(source, "    struct evpl_rpc2_msg *msg = private_data;\n");
             fprintf(source, "    struct evpl_iovec iov;\n");
             fprintf(source, "    int niov, len;\n");
-            fprintf(source, "    niov = evpl_iovec_alloc(evpl, msg->program->reserve, 8, 1, &iov);\n");
+            fprintf(source, "    niov = evpl_iovec_alloc(evpl, msg->program->reserve, 8, 1, 0, &iov);\n");
             fprintf(source,
                     "    msg->program->send_reply_dispatch(evpl, msg, &iov, niov, msg->program->reserve);\n")
             ;
@@ -1492,7 +1492,7 @@ emit_program(
             fprintf(source, "    xdr_iovec_set_len(&iov, len);\n");
             fprintf(source, "    evpl_iovec_commit(evpl, 0, &iov, 1);\n");
             fprintf(source,
-                    "    evpl_iovec_release(&iov);\n");
+                    "    evpl_iovec_release(evpl, &iov);\n");
 
             fprintf(source, "    evpl_rpc2_call(evpl, program, conn, %d, "
                     "msg_iov, msg_niov, len, conn->rdma && ddp ? &rdma_chunk : NULL, max_rdma_write_chunk, max_rdma_reply_chunk, callback, callback_private_data);\n",
@@ -1501,7 +1501,7 @@ emit_program(
 
             /* Void argument case */
             fprintf(source, "    int niov;\n");
-            fprintf(source, "    niov = evpl_iovec_alloc(evpl, program->reserve, 8, 1, &iov);\n");
+            fprintf(source, "    niov = evpl_iovec_alloc(evpl, program->reserve, 8, 1, 0, &iov);\n");
 
             fprintf(source, "    evpl_rpc2_call(evpl, program, conn, %d, "
                     "&iov, niov, program->reserve,NULL, max_rdma_write_chunk, max_rdma_reply_chunk, callback, callback_private_data);\n",
