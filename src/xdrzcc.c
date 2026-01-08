@@ -141,7 +141,7 @@ emit_marshall(
 
         fprintf(output, "    {\n");
         fprintf(output, "            uint32_t more;\n");
-        fprintf(output, "        const struct %s *current = in->%s;\n", type->
+        fprintf(output, "        struct %s *current = in->%s;\n", type->
                 name, name);
         fprintf(output, "        while (current != NULL) {\n");
         fprintf(output, "            more = 1;\n");
@@ -534,7 +534,7 @@ emit_internal_headers(
         fprintf(source, "static FORCE_INLINE int WARN_UNUSED_RESULT\n");
     }
     fprintf(source, "__marshall_%s(\n", name);
-    fprintf(source, "    const struct %s *in,\n", name);
+    fprintf(source, "    struct %s *in,\n", name);
     fprintf(source, "    struct xdr_write_cursor *cursor);\n\n");
 
     fprintf(source, "static int\n");
@@ -560,7 +560,7 @@ emit_wrapper_headers(
     const char *name)
 {
     fprintf(header, "int marshall_%s(\n", name);
-    fprintf(header, "    const struct %s *in,\n", name);
+    fprintf(header, "    struct %s *in,\n", name);
     fprintf(header, "    xdr_iovec *iov_in,\n");
     fprintf(header, "    xdr_iovec *iov_out,\n");
     fprintf(header, "    int *niov_out,\n");
@@ -569,7 +569,7 @@ emit_wrapper_headers(
 
     fprintf(header, "int unmarshall_%s(\n", name);
     fprintf(header, "    struct %s *out,\n", name);
-    fprintf(header, "    const xdr_iovec *iov,\n");
+    fprintf(header, "    xdr_iovec *iov,\n");
     fprintf(header, "    int niov,\n");
     fprintf(header, "    struct evpl_rpc2_rdma_chunk *rdma_chunk,\n");
     fprintf(header, "    xdr_dbuf *dbuf);\n\n");
@@ -1102,16 +1102,16 @@ emit_program(
 
     /* Generate RPC2 marshall/unmarshall wrappers for builtin types that need them */
     for (functionp = version->functions; functionp != NULL; functionp = functionp->next) {
-        struct xdr_type *types[2] = {functionp->call_type, functionp->reply_type};
+        struct xdr_type *types[2] = { functionp->call_type, functionp->reply_type };
         for (int i = 0; i < 2; i++) {
             struct xdr_type *type = types[i];
             /* Generate wrappers for builtin types (not void or opaque) */
             if (type->builtin && strcmp(type->name, "void") != 0 &&
                 strcmp(type->name, "xdr_iovec") != 0) {
                 /* Check if we've already generated wrappers for this type */
-                static const char *generated_types[32] = {NULL};
-                static int num_generated = 0;
-                int already_generated = 0;
+                static const char *generated_types[32] = { NULL };
+                static int         num_generated       = 0;
+                int                already_generated   = 0;
                 for (int j = 0; j < num_generated; j++) {
                     if (generated_types[j] && strcmp(generated_types[j], type->name) == 0) {
                         already_generated = 1;
@@ -1124,7 +1124,7 @@ emit_program(
                     /* Generate unmarshall wrapper for RPC2 */
                     fprintf(source, "static int unmarshall_%s(\n", type->name);
                     fprintf(source, "    %s *out,\n", type->name);
-                    fprintf(source, "    const xdr_iovec *iov,\n");
+                    fprintf(source, "    xdr_iovec *iov,\n");
                     fprintf(source, "    int niov,\n");
                     fprintf(source, "    struct evpl_rpc2_rdma_chunk *rdma_chunk,\n");
                     fprintf(source, "    xdr_dbuf *dbuf)\n");
@@ -1149,7 +1149,9 @@ emit_program(
                     fprintf(source, "    int out_offset)\n");
                     fprintf(source, "{\n");
                     fprintf(source, "    struct xdr_write_cursor cursor;\n");
-                    fprintf(source, "    xdr_write_cursor_init(&cursor, iov_in, iov_out, *niov_out, rdma_chunk, out_offset);\n");
+                    fprintf(source,
+                            "    xdr_write_cursor_init(&cursor, iov_in, iov_out, *niov_out, rdma_chunk, out_offset);\n")
+                    ;
                     fprintf(source, "    if (unlikely(__marshall_%s(out, &cursor) < 0)) return -1;\n", type->name);
                     fprintf(source, "    if (unlikely(xdr_write_cursor_flush(&cursor) < 0)) return -1;\n");
                     fprintf(source, "    *niov_out = cursor.niov;\n");
@@ -1282,16 +1284,20 @@ emit_program(
                 fprintf(source, "            struct xdr_read_cursor cursor;\n");
                 fprintf(source, "            if (niov == 1) {\n");
                 fprintf(source, "                xdr_read_cursor_contig_init(&cursor, iov, &msg->read_chunk);\n");
-                fprintf(source, "                for (int _i = 0; _i < %s; _i++) {\n", functionp->reply_type->array_size);
-                fprintf(source, "                    int _rc = __unmarshall_%s_contig(&%s_arg[_i], &cursor, msg->dbuf);\n",
+                fprintf(source, "                for (int _i = 0; _i < %s; _i++) {\n", functionp->reply_type->array_size
+                        );
+                fprintf(source,
+                        "                    int _rc = __unmarshall_%s_contig(&%s_arg[_i], &cursor, msg->dbuf);\n",
                         functionp->reply_type->name, functionp->name);
                 fprintf(source, "                    if (unlikely(_rc < 0)) return 2;\n");
                 fprintf(source, "                    len += _rc;\n");
                 fprintf(source, "                }\n");
                 fprintf(source, "            } else {\n");
                 fprintf(source, "                xdr_read_cursor_vector_init(&cursor, iov, niov, &msg->read_chunk);\n");
-                fprintf(source, "                for (int _i = 0; _i < %s; _i++) {\n", functionp->reply_type->array_size);
-                fprintf(source, "                    int _rc = __unmarshall_%s_vector(&%s_arg[_i], &cursor, msg->dbuf);\n",
+                fprintf(source, "                for (int _i = 0; _i < %s; _i++) {\n", functionp->reply_type->array_size
+                        );
+                fprintf(source,
+                        "                    int _rc = __unmarshall_%s_vector(&%s_arg[_i], &cursor, msg->dbuf);\n",
                         functionp->reply_type->name, functionp->name);
                 fprintf(source, "                    if (unlikely(_rc < 0)) return 2;\n");
                 fprintf(source, "                    len += _rc;\n");
@@ -1368,7 +1374,8 @@ emit_program(
             if (functionp->reply_type->array) {
                 fprintf(source, "    {\n");
                 fprintf(source, "        struct xdr_write_cursor cursor;\n");
-                fprintf(source, "        xdr_write_cursor_init(&cursor, &iov, msg_iov, msg_niov, &msg->write_chunk, msg->program->reserve);\n");
+                fprintf(source,
+                        "        xdr_write_cursor_init(&cursor, &iov, msg_iov, msg_niov, &msg->write_chunk, msg->program->reserve);\n");
                 fprintf(source, "        for (int _i = 0; _i < %s; _i++) {\n", functionp->reply_type->array_size);
                 fprintf(source, "            if (unlikely(__marshall_%s(&arg[_i], &cursor) < 0)) return -1;\n",
                         functionp->reply_type->name);
@@ -1391,6 +1398,8 @@ emit_program(
             fprintf(source,
                     "    evpl_iovec_commit(evpl, 0, &iov, 1);\n");
             fprintf(source,
+                    "    evpl_iovec_release(evpl, &iov);\n");
+            fprintf(source,
                     "    msg->program->send_reply_dispatch(evpl, msg, msg_iov, msg_niov, len);\n");
         } else {
             fprintf(source,
@@ -1400,7 +1409,7 @@ emit_program(
             fprintf(source, "    struct evpl_rpc2_msg *msg = private_data;\n");
             fprintf(source, "    struct evpl_iovec iov;\n");
             fprintf(source, "    int niov, len;\n");
-            fprintf(source, "    niov = evpl_iovec_alloc(evpl, msg->program->reserve, 8, 1, &iov);\n");
+            fprintf(source, "    niov = evpl_iovec_alloc(evpl, msg->program->reserve, 8, 1, 0, &iov);\n");
             fprintf(source,
                     "    msg->program->send_reply_dispatch(evpl, msg, &iov, niov, msg->program->reserve);\n")
             ;
@@ -1482,6 +1491,8 @@ emit_program(
 
             fprintf(source, "    xdr_iovec_set_len(&iov, len);\n");
             fprintf(source, "    evpl_iovec_commit(evpl, 0, &iov, 1);\n");
+            fprintf(source,
+                    "    evpl_iovec_release(evpl, &iov);\n");
 
             fprintf(source, "    evpl_rpc2_call(evpl, program, conn, %d, "
                     "msg_iov, msg_niov, len, conn->rdma && ddp ? &rdma_chunk : NULL, max_rdma_write_chunk, max_rdma_reply_chunk, callback, callback_private_data);\n",
@@ -1490,7 +1501,7 @@ emit_program(
 
             /* Void argument case */
             fprintf(source, "    int niov;\n");
-            fprintf(source, "    niov = evpl_iovec_alloc(evpl, program->reserve, 8, 1, &iov);\n");
+            fprintf(source, "    niov = evpl_iovec_alloc(evpl, program->reserve, 8, 1, 0, &iov);\n");
 
             fprintf(source, "    evpl_rpc2_call(evpl, program, conn, %d, "
                     "&iov, niov, program->reserve,NULL, max_rdma_write_chunk, max_rdma_reply_chunk, callback, callback_private_data);\n",
@@ -1612,7 +1623,7 @@ emit_wrappers(
 {
     fprintf(source, "int WARN_UNUSED_RESULT\n");
     fprintf(source, "marshall_%s(\n", name);
-    fprintf(source, "    const struct %s *out,\n", name);
+    fprintf(source, "    struct %s *out,\n", name);
     fprintf(source, "    xdr_iovec *iov_in,\n");
     fprintf(source, "    xdr_iovec *iov_out,\n");
     fprintf(source, "    int *niov_out,\n");
@@ -1625,7 +1636,7 @@ emit_wrappers(
     if (xdr_structp && xdr_structp->linkedlist) {
         /* For linked list structs, iterate through the list with value-follows markers */
         fprintf(source, "    uint32_t more;\n");
-        fprintf(source, "    const struct %s *current = out;\n", name);
+        fprintf(source, "    struct %s *current = out;\n", name);
         fprintf(source, "    while (current != NULL) {\n");
         fprintf(source, "        more = 1;\n");
         fprintf(source, "        if (unlikely(__marshall_uint32_t(&more, &cursor) < 0)) return -1;\n");
@@ -1646,7 +1657,7 @@ emit_wrappers(
     fprintf(source, "int WARN_UNUSED_RESULT\n");
     fprintf(source, "unmarshall_%s(\n", name);
     fprintf(source, "    struct %s *out,\n", name);
-    fprintf(source, "    const xdr_iovec *iov,\n");
+    fprintf(source, "    xdr_iovec *iov,\n");
     fprintf(source, "    int niov,\n");
     fprintf(source, "    struct evpl_rpc2_rdma_chunk *rdma_chunk,\n");
     fprintf(source, "    xdr_dbuf *dbuf) {\n");
@@ -1655,7 +1666,7 @@ emit_wrappers(
     fprintf(source, "        xdr_read_cursor_contig_init(&cursor, iov, rdma_chunk);\n");
     fprintf(source, "        return __unmarshall_%s_contig(out, &cursor, dbuf);\n", name);
     fprintf(source, "    } else {\n");
-        fprintf(source, "        xdr_read_cursor_vector_init(&cursor, iov, niov, rdma_chunk);\n");
+    fprintf(source, "        xdr_read_cursor_vector_init(&cursor, iov, niov, rdma_chunk);\n");
     fprintf(source, "        return __unmarshall_%s_vector(out, &cursor, dbuf);\n", name);
     fprintf(source, "    }\n");
     fprintf(source, "}\n\n");
@@ -2081,7 +2092,7 @@ main(
             fprintf(source, "static FORCE_INLINE int WARN_UNUSED_RESULT\n");
         }
         fprintf(source, "__marshall_%s(\n", xdr_structp->name);
-        fprintf(source, "    const struct %s *in,\n", xdr_structp->name);
+        fprintf(source, "    struct %s *in,\n", xdr_structp->name);
         fprintf(source, "    struct xdr_write_cursor *cursor) {\n");
 
         DL_FOREACH(xdr_structp->members, xdr_struct_memberp)
@@ -2164,7 +2175,7 @@ main(
             fprintf(source, "static FORCE_INLINE int WARN_UNUSED_RESULT\n");
         }
         fprintf(source, "__marshall_%s(\n", xdr_unionp->name);
-        fprintf(source, "    const struct %s *in,\n", xdr_unionp->name);
+        fprintf(source, "    struct %s *in,\n", xdr_unionp->name);
         fprintf(source, "    struct xdr_write_cursor *cursor) {\n");
 
         emit_marshall(source, xdr_unionp->pivot_name, xdr_unionp->pivot_type);
