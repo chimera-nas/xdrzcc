@@ -892,7 +892,7 @@ __marshall_opaque_zerocopy(
     }
 
 #if EVPL_RPC2
-    if (cursor->rdma_chunk && v->length <= cursor->rdma_chunk->max_length) {
+    if (cursor->rdma_chunk && cursor->rdma_chunk->max_length > 0 && v->length <= cursor->rdma_chunk->max_length) {
         cursor->rdma_chunk->iov          = v->iov;
         cursor->rdma_chunk->niov         = v->niov;
         cursor->rdma_chunk->length       = v->length;
