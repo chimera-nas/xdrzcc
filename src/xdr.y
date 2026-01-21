@@ -56,7 +56,7 @@ void yyerror(const char *s) {
 %token <str> IDENTIFIER NUMBER
 %token UINT32 INT32 UINT64 INT64
 %token INT LONG UNSIGNED FLOAT DOUBLE BOOL ENUM STRUCT TYPEDEF
-%token VOID STRING OPAQUE ZCOPAQUE UNION SWITCH CASE DEFAULT CONST
+%token VOID STRING OPAQUE ZCOPAQUE UNION OPAQUE_UNION SWITCH CASE DEFAULT CONST
 %token LBRACE RBRACE LPAREN RPAREN SEMICOLON COLON EQUALS
 %token LBRACKET RBRACKET STAR LANGLE RANGLE COMMA PROGRAM VERSION
 
@@ -342,6 +342,16 @@ union_def:
         $$->pivot_name = $6;
         $$->pivot_type = $5;
         $$->cases = $9;
+        $$->opaque = 0;
+    }
+    | OPAQUE_UNION IDENTIFIER SWITCH LPAREN type IDENTIFIER RPAREN LBRACE union_body RBRACE
+    {
+        $$ = xdr_alloc(sizeof(*$$));
+        $$->name = $2;
+        $$->pivot_name = $6;
+        $$->pivot_type = $5;
+        $$->cases = $9;
+        $$->opaque = 1;
     }
     ;
 
@@ -376,7 +386,34 @@ case_clause:
         $$->type = $2;
         $$->name = $3;
     }
-    | case_label 
+    | case_label type IDENTIFIER LANGLE NUMBER RANGLE SEMICOLON
+    {
+        $$ = xdr_alloc(sizeof(*$$));
+        $$->label = $1;
+        $$->type = $2;
+        $$->name = $3;
+        $$->type->vector = 1;
+        $$->type->vector_bound = $5;
+    }
+    | case_label type IDENTIFIER LANGLE IDENTIFIER RANGLE SEMICOLON
+    {
+        $$ = xdr_alloc(sizeof(*$$));
+        $$->label = $1;
+        $$->type = $2;
+        $$->name = $3;
+        $$->type->vector = 1;
+        $$->type->vector_bound = $5;
+    }
+    | case_label type IDENTIFIER LANGLE RANGLE SEMICOLON
+    {
+        $$ = xdr_alloc(sizeof(*$$));
+        $$->label = $1;
+        $$->type = $2;
+        $$->name = $3;
+        $$->type->vector = 1;
+        $$->type->vector_bound = NULL;
+    }
+    | case_label
     {
         $$ = xdr_alloc(sizeof(*$$));
         $$->label = $1;

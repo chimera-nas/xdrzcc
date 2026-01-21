@@ -46,6 +46,7 @@ char * xdr_strdup(const char *str);
 "opaque"        { column_num += yyleng; return OPAQUE; }
 "zcopaque"      { column_num += yyleng; return ZCOPAQUE; }
 "union"         { column_num += yyleng; return UNION; }
+"opaque_union"  { column_num += yyleng; return OPAQUE_UNION; }
 "switch"        { column_num += yyleng; return SWITCH; }
 "case"          { column_num += yyleng; return CASE; }
 "default"       { column_num += yyleng; return DEFAULT; }

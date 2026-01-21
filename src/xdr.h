@@ -86,6 +86,7 @@ struct xdr_union {
     char                  *pivot_name;
     struct xdr_union_case *cases;
     struct xdr_union_case *default_case;
+    int                    opaque;  /* opaque_union: length prefix for wire compatibility */
     struct xdr_union      *prev;
     struct xdr_union      *next;
 

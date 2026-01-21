@@ -703,12 +703,12 @@ emit_length_member(
         if (emit_type->array) {
             fprintf(source, "    length += xdr_pad(%s);\n", emit_type->array_size);
         } else if (emit_type->zerocopy) {
-            fprintf(source, "    length += 4 + xdr_pad(in->%s.length);\n", name);
+            fprintf(source, "    length += 4 + in->%s.length + xdr_pad(in->%s.length);\n", name, name);
         } else {
-            fprintf(source, "    length += 4 + xdr_pad(in->%s.len);\n", name);
+            fprintf(source, "    length += 4 + in->%s.len + xdr_pad(in->%s.len);\n", name, name);
         }
     } else if (strcmp(emit_type->name, "xdr_string") == 0) {
-        fprintf(source, "    length += 4 + xdr_pad(in->%s.len);\n", name);
+        fprintf(source, "    length += 4 + in->%s.len + xdr_pad(in->%s.len);\n", name, name);
     } else if (emit_type->vector) {
         fprintf(source, "    length += 4;\n");
         fprintf(source, "    for (int i = 0; i < in->num_%s; i++) {\n", name);
@@ -854,6 +854,17 @@ emit_dump_union(
     fprintf(source, "}\n\n");
 } /* emit_dump_union */
 
+/*
+ * Check if a type is a variable-length opaque (has its own length prefix).
+ * For opaque_union, if a case type is variable-length opaque, we should NOT
+ * emit the separate body_len prefix since the opaque's length IS the body length.
+ */
+static int
+is_varlen_opaque(struct xdr_type *type)
+{
+    return type && type->opaque && !type->array;
+} /* is_varlen_opaque */
+
 void
 emit_length_union(
     FILE             *source,
@@ -881,6 +892,13 @@ emit_length_union(
     {
         if (strcmp(casep->label, "default") != 0) {
             fprintf(source, "    case %s:\n", casep->label);
+            /*
+             * For opaque_union, add body_len prefix (4 bytes) except for
+             * varlen opaque types which have their own length prefix.
+             */
+            if (xdr_unionp->opaque && !is_varlen_opaque(casep->type)) {
+                fprintf(source, "        length += 4; /* opaque union body length prefix */\n");
+            }
             if (casep->type) {
                 emit_length_member(source, casep->name, casep->type);
             }
@@ -892,6 +910,16 @@ emit_length_union(
     {
         if (strcmp(casep->label, "default") == 0) {
             fprintf(source, "    default:\n");
+            /*
+             * For opaque_union, add body_len prefix (4 bytes) except for
+             * varlen opaque types which have their own length prefix.
+             */
+            if (xdr_unionp->opaque && !is_varlen_opaque(casep->type)) {
+                fprintf(source, "        length += 4; /* opaque union body length prefix */\n");
+            }
+            if (casep->type) {
+                emit_length_member(source, casep->name, casep->type);
+            }
             fprintf(source, "        break;\n");
         }
     }
@@ -962,7 +990,7 @@ emit_program_header(
             if (strcmp(functionp->reply_type->name, "void")) {
                 if (is_byvalue_builtin(functionp->reply_type)) {
                     fprintf(header,
-                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, %s%s, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, %s reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, const struct evpl_rpc2_cred *cred, %s%s, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s reply, int status, void *callback_private_data), void *callback_private_data);\n",
                             functionp->name,
                             call_type_buf,
                             call_ptr,
@@ -970,7 +998,7 @@ emit_program_header(
                             );
                 } else {
                     fprintf(header,
-                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, %s%s, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, const struct evpl_rpc2_cred *cred, %s%s, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
                             functionp->name,
                             call_type_buf,
                             call_ptr,
@@ -979,7 +1007,7 @@ emit_program_header(
                 }
             } else {
                 fprintf(header,
-                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, %s%s, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, int status, void *callback_private_data), void *callback_private_data);\n",
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, const struct evpl_rpc2_cred *cred, %s%s, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, int status, void *callback_private_data), void *callback_private_data);\n",
                         functionp->name,
                         call_type_buf,
                         call_ptr
@@ -990,20 +1018,20 @@ emit_program_header(
             if (strcmp(functionp->reply_type->name, "void")) {
                 if (is_byvalue_builtin(functionp->reply_type)) {
                     fprintf(header,
-                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, %s reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, const struct evpl_rpc2_cred *cred, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s reply, int status, void *callback_private_data), void *callback_private_data);\n",
                             functionp->name,
                             reply_type_buf
                             );
                 } else {
                     fprintf(header,
-                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, const struct evpl_rpc2_cred *cred, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
                             functionp->name,
                             reply_type_buf
                             );
                 }
             } else {
                 fprintf(header,
-                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, int status, void *callback_private_data), void *callback_private_data);\n",
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, const struct evpl_rpc2_cred *cred, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, int status, void *callback_private_data), void *callback_private_data);\n",
                         functionp->name
                         );
 
@@ -1013,55 +1041,55 @@ emit_program_header(
         if (strcmp(functionp->reply_type->name, "void")) {
             if (is_byvalue_builtin(functionp->reply_type)) {
                 fprintf(header,
-                        "   int WARN_UNUSED_RESULT (*send_reply_%s)(struct evpl *evpl, %s, void *);\n",
+                        "   int WARN_UNUSED_RESULT (*send_reply_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s, void *);\n",
                         functionp->name,
                         reply_type_buf);
             } else {
                 fprintf(header,
-                        "   int WARN_UNUSED_RESULT (*send_reply_%s)(struct evpl *evpl, %s *, void *);\n",
+                        "   int WARN_UNUSED_RESULT (*send_reply_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s *, void *);\n",
                         functionp->name,
                         reply_type_buf);
             }
 
         } else {
             fprintf(header,
-                    "   int WARN_UNUSED_RESULT (*send_reply_%s)(struct evpl *evpl, void *);\n",
+                    "   int WARN_UNUSED_RESULT (*send_reply_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, void *);\n",
                     functionp->name);
         }
 
         if (strcmp(functionp->call_type->name, "void")) {
             if (is_byvalue_builtin(functionp->call_type)) {
                 fprintf(header,
-                        "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, %s, struct evpl_rpc2_msg *, void *);\n",
+                        "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, struct evpl_rpc2_cred *cred, %s, struct evpl_rpc2_msg *, void *);\n",
                         functionp->name,
                         call_type_buf);
             } else {
                 fprintf(header,
-                        "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, %s *, struct evpl_rpc2_msg *, void *);\n",
+                        "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, struct evpl_rpc2_cred *cred, %s *, struct evpl_rpc2_msg *, void *);\n",
                         functionp->name,
                         call_type_buf);
             }
         } else {
             fprintf(header,
-                    "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, struct evpl_rpc2_msg *, void *);\n",
+                    "   void (*recv_call_%s)(struct evpl *evpl, struct evpl_rpc2_conn *conn, struct evpl_rpc2_cred *cred, struct evpl_rpc2_msg *, void *);\n",
                     functionp->name);
         }
 
         if (strcmp(functionp->reply_type->name, "void")) {
             if (is_byvalue_builtin(functionp->reply_type)) {
                 fprintf(header,
-                        "    void (*recv_reply_%s)(struct evpl *evpl, "
+                        "    void (*recv_reply_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, "
                         "%s reply, int status, void *callback_private_data);\n",
                         functionp->name, reply_type_buf);
             } else {
                 fprintf(header,
-                        "    void (*recv_reply_%s)(struct evpl *evpl, "
+                        "    void (*recv_reply_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, "
                         "%s *reply, int status, void *callback_private_data);\n",
                         functionp->name, reply_type_buf);
             }
         } else {
             fprintf(header,
-                    "    void (*recv_reply_%s)(struct evpl *evpl, "
+                    "    void (*recv_reply_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, "
                     "int status, void *callback_private_data);\n",
                     functionp->name);
         }
@@ -1167,6 +1195,7 @@ emit_program(
     fprintf(source, "    struct evpl *evpl,\n");
     fprintf(source, "    struct evpl_rpc2_conn *conn,\n");
     fprintf(source, "    struct evpl_rpc2_msg *msg,\n");
+    fprintf(source, "    struct evpl_rpc2_cred *cred,\n");
     fprintf(source, "    xdr_iovec *iov,\n");
     fprintf(source, "    int niov,\n");
     fprintf(source, "    int length,\n");
@@ -1213,17 +1242,17 @@ emit_program(
             /* Then make the call - builtin scalars are passed by value */
             if (is_byvalue_builtin(functionp->call_type)) {
                 fprintf(source,
-                        "        prog->recv_call_%s(evpl, conn, *%s_arg, msg, private_data);\n",
+                        "        prog->recv_call_%s(evpl, conn, cred, *%s_arg, msg, private_data);\n",
                         functionp->name, functionp->name);
             } else {
                 fprintf(source,
-                        "        prog->recv_call_%s(evpl, conn, %s_arg, msg, private_data);\n",
+                        "        prog->recv_call_%s(evpl, conn, cred, %s_arg, msg, private_data);\n",
                         functionp->name, functionp->name);
             }
         } else {
             /* No argument, just make the call */
             fprintf(source,
-                    "        prog->recv_call_%s(evpl, conn, msg, private_data);\n",
+                    "        prog->recv_call_%s(evpl, conn, cred, msg, private_data);\n",
                     functionp->name);
 
         }
@@ -1242,6 +1271,7 @@ emit_program(
     fprintf(source, "    struct evpl *evpl,\n");
     fprintf(source, "    struct evpl_rpc2_conn *conn,\n");
     fprintf(source, "    struct evpl_rpc2_msg *msg,\n");
+    fprintf(source, "    const struct evpl_rpc2_verf *verf,\n");
     fprintf(source, "    xdr_iovec *iov,\n");
     fprintf(source, "    int niov,\n");
     fprintf(source, "    int length,\n");
@@ -1315,27 +1345,27 @@ emit_program(
             /* Then make the call - builtin scalars are passed by value */
             if (is_byvalue_builtin(functionp->reply_type)) {
                 fprintf(source,
-                        " void (*callback_%s)(struct evpl *evpl, %s reply, int status, void *callback_private_data) = callback_fn;\n",
+                        " void (*callback_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s reply, int status, void *callback_private_data) = callback_fn;\n",
                         functionp->name, reply_type_buf);
                 fprintf(source,
-                        "        callback_%s(evpl, *%s_arg, 0, callback_private_data);\n",
+                        "        callback_%s(evpl, verf, *%s_arg, 0, callback_private_data);\n",
                         functionp->name, functionp->name);
             } else {
                 fprintf(source,
-                        " void (*callback_%s)(struct evpl *evpl, %s *reply, int status, void *callback_private_data) = callback_fn;\n",
+                        " void (*callback_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s *reply, int status, void *callback_private_data) = callback_fn;\n",
                         functionp->name, reply_type_buf);
                 fprintf(source,
-                        "        callback_%s(evpl, %s_arg, 0, callback_private_data);\n",
+                        "        callback_%s(evpl, verf, %s_arg, 0, callback_private_data);\n",
                         functionp->name, functionp->name);
             }
             fprintf(source, "        }\n");
         } else {
             fprintf(source,
-                    " void (*callback_%s)(struct evpl *evpl, int status, void *callback_private_data) = callback_fn;\n",
+                    " void (*callback_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, int status, void *callback_private_data) = callback_fn;\n",
                     functionp->name);
             /* No argument, just make the call */
             fprintf(source,
-                    "        callback_%s(evpl, 0, callback_private_data);\n",
+                    "        callback_%s(evpl, verf, 0, callback_private_data);\n",
                     functionp->name);
 
         }
@@ -1355,11 +1385,11 @@ emit_program(
         if (strcmp(functionp->reply_type->name, "void")) {
             if (is_byvalue_builtin(functionp->reply_type)) {
                 fprintf(source,
-                        "static int send_reply_%s(struct evpl *evpl, %s arg, void *private_data)\n",
+                        "static int send_reply_%s(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s arg, void *private_data)\n",
                         functionp->name, reply_type_buf);
             } else {
                 fprintf(source,
-                        "static int send_reply_%s(struct evpl *evpl, %s *arg, void *private_data)\n",
+                        "static int send_reply_%s(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s *arg, void *private_data)\n",
                         functionp->name, reply_type_buf);
             }
             fprintf(source, "{\n");
@@ -1400,10 +1430,10 @@ emit_program(
             fprintf(source,
                     "    evpl_iovec_release(evpl, &iov);\n");
             fprintf(source,
-                    "    msg->program->send_reply_dispatch(evpl, msg, msg_iov, msg_niov, len);\n");
+                    "    msg->program->send_reply_dispatch(evpl, msg, verf, msg_iov, msg_niov, len);\n");
         } else {
             fprintf(source,
-                    "int send_reply_%s(struct evpl *evpl, void *private_data)\n",
+                    "int send_reply_%s(struct evpl *evpl, const struct evpl_rpc2_verf *verf, void *private_data)\n",
                     functionp->name);
             fprintf(source, "{\n");
             fprintf(source, "    struct evpl_rpc2_msg *msg = private_data;\n");
@@ -1411,7 +1441,7 @@ emit_program(
             fprintf(source, "    int niov, len;\n");
             fprintf(source, "    niov = evpl_iovec_alloc(evpl, msg->program->reserve, 8, 1, 0, &iov);\n");
             fprintf(source,
-                    "    msg->program->send_reply_dispatch(evpl, msg, &iov, niov, msg->program->reserve);\n")
+                    "    msg->program->send_reply_dispatch(evpl, msg, verf, &iov, niov, msg->program->reserve);\n")
             ;
         }
         fprintf(source, "    return 0;\n");
@@ -1429,6 +1459,7 @@ emit_program(
         fprintf(source, "    struct evpl_rpc2_program *program,\n");
         fprintf(source, "    struct evpl *evpl,\n");
         fprintf(source, "    struct evpl_rpc2_conn *conn,\n");
+        fprintf(source, "    const struct evpl_rpc2_cred *cred,\n");
 
         if (has_args) {
             if (is_byvalue_builtin(functionp->call_type)) {
@@ -1445,15 +1476,15 @@ emit_program(
         if (has_reply_args) {
             if (is_byvalue_builtin(functionp->reply_type)) {
                 fprintf(source,
-                        "    void (*callback)(struct evpl *evpl, %s reply, int status, void *callback_private_data),\n",
+                        "    void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s reply, int status, void *callback_private_data),\n",
                         reply_type_buf);
             } else {
                 fprintf(source,
-                        "    void (*callback)(struct evpl *evpl, %s *reply, int status, void *callback_private_data),\n",
+                        "    void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s *reply, int status, void *callback_private_data),\n",
                         reply_type_buf);
             }
         } else {
-            fprintf(source, "    void (*callback)(struct evpl *evpl, int status, void *callback_private_data),\n");
+            fprintf(source, "    void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, int status, void *callback_private_data),\n");
         }
 
 
@@ -1494,7 +1525,7 @@ emit_program(
             fprintf(source,
                     "    evpl_iovec_release(evpl, &iov);\n");
 
-            fprintf(source, "    evpl_rpc2_call(evpl, program, conn, %d, "
+            fprintf(source, "    evpl_rpc2_call(evpl, program, conn, cred, %d, "
                     "msg_iov, msg_niov, len, conn->rdma && ddp ? &rdma_chunk : NULL, max_rdma_write_chunk, max_rdma_reply_chunk, callback, callback_private_data);\n",
                     functionp->id);
         } else {
@@ -1503,7 +1534,7 @@ emit_program(
             fprintf(source, "    int niov;\n");
             fprintf(source, "    niov = evpl_iovec_alloc(evpl, program->reserve, 8, 1, 0, &iov);\n");
 
-            fprintf(source, "    evpl_rpc2_call(evpl, program, conn, %d, "
+            fprintf(source, "    evpl_rpc2_call(evpl, program, conn, cred, %d, "
                     "&iov, niov, program->reserve,NULL, max_rdma_write_chunk, max_rdma_reply_chunk, callback, callback_private_data);\n",
                     functionp->id);
         }
@@ -2180,6 +2211,72 @@ main(
 
         emit_marshall(source, xdr_unionp->pivot_name, xdr_unionp->pivot_type);
 
+        if (xdr_unionp->opaque) {
+            /*
+             * For opaque unions, calculate and write body length before the body.
+             * Exception: varlen opaque types have their own length prefix, so skip
+             * writing a separate body_len for those cases.
+             */
+            fprintf(source, "    {\n");
+            fprintf(source, "        uint32_t body_len = 0;\n");
+            fprintf(source, "        int skip_body_len = 0;\n");
+            fprintf(source, "        switch (in->%s) {\n", xdr_unionp->pivot_name);
+
+            DL_FOREACH(xdr_unionp->cases, xdr_union_casep)
+            {
+                if (strcmp(xdr_union_casep->label, "default") != 0) {
+                    fprintf(source, "        case %s:\n", xdr_union_casep->label);
+                    if (xdr_union_casep->voided) {
+                        fprintf(source, "            body_len = 0;\n");
+                    } else if (xdr_union_casep->type) {
+                        /* Handle opaque types specially - they don't have __marshall_length_* functions */
+                        if (is_varlen_opaque(xdr_union_casep->type)) {
+                            /* Varlen opaque has its own length prefix - skip body_len */
+                            fprintf(source, "            skip_body_len = 1;\n");
+                        } else if (xdr_union_casep->type->opaque) {
+                            /* Fixed-size opaque array - still need body_len */
+                            fprintf(source, "            body_len = xdr_pad(%s);\n",
+                                    xdr_union_casep->type->array_size);
+                        } else {
+                            fprintf(source, "            body_len = __marshall_length_%s(&in->%s);\n",
+                                    xdr_union_casep->type->name, xdr_union_casep->name);
+                        }
+                    }
+                    fprintf(source, "            break;\n");
+                }
+            }
+
+            DL_FOREACH(xdr_unionp->cases, xdr_union_casep)
+            {
+                if (strcmp(xdr_union_casep->label, "default") == 0) {
+                    fprintf(source, "        default:\n");
+                    if (xdr_union_casep->voided) {
+                        fprintf(source, "            body_len = 0;\n");
+                    } else if (xdr_union_casep->type) {
+                        /* Handle opaque types specially - they don't have __marshall_length_* functions */
+                        if (is_varlen_opaque(xdr_union_casep->type)) {
+                            /* Varlen opaque has its own length prefix - skip body_len */
+                            fprintf(source, "            skip_body_len = 1;\n");
+                        } else if (xdr_union_casep->type->opaque) {
+                            /* Fixed-size opaque array - still need body_len */
+                            fprintf(source, "            body_len = xdr_pad(%s);\n",
+                                    xdr_union_casep->type->array_size);
+                        } else {
+                            fprintf(source, "            body_len = __marshall_length_%s(&in->%s);\n",
+                                    xdr_union_casep->type->name, xdr_union_casep->name);
+                        }
+                    }
+                    fprintf(source, "            break;\n");
+                }
+            }
+
+            fprintf(source, "        }\n");
+            fprintf(source, "        if (!skip_body_len) {\n");
+            fprintf(source, "            if (unlikely(__marshall_uint32_t(&body_len, cursor) < 0)) return -1;\n");
+            fprintf(source, "        }\n");
+            fprintf(source, "    }\n");
+        }
+
         fprintf(source, "    switch (in->%s) {\n", xdr_unionp->pivot_name);
 
         DL_FOREACH(xdr_unionp->cases, xdr_union_casep)
@@ -2225,7 +2322,53 @@ main(
         fprintf(source, "    xdr_dbuf *dbuf) {\n");
         fprintf(source, "    int rc, len = 0;\n");
 
+        if (xdr_unionp->opaque) {
+            fprintf(source, "    uint32_t expected_body_len = 0;\n");
+            fprintf(source, "    int body_start_len = 0;\n");
+            fprintf(source, "    int skip_body_len_check = 0;\n");
+        }
+
         emit_unmarshall(source, xdr_unionp->pivot_name, xdr_unionp->pivot_type);
+
+        if (xdr_unionp->opaque) {
+            /*
+             * For opaque unions, read the body length, but skip for varlen
+             * opaque types which have their own length prefix.
+             */
+            fprintf(source, "    switch (out->%s) {\n", xdr_unionp->pivot_name);
+
+            DL_FOREACH(xdr_unionp->cases, xdr_union_casep)
+            {
+                if (strcmp(xdr_union_casep->label, "default") != 0) {
+                    if (is_varlen_opaque(xdr_union_casep->type)) {
+                        fprintf(source, "    case %s:\n", xdr_union_casep->label);
+                        fprintf(source, "        skip_body_len_check = 1;\n");
+                        fprintf(source, "        break;\n");
+                    }
+                }
+            }
+
+            DL_FOREACH(xdr_unionp->cases, xdr_union_casep)
+            {
+                if (strcmp(xdr_union_casep->label, "default") == 0) {
+                    if (is_varlen_opaque(xdr_union_casep->type)) {
+                        fprintf(source, "    default:\n");
+                        fprintf(source, "        skip_body_len_check = 1;\n");
+                        fprintf(source, "        break;\n");
+                    }
+                }
+            }
+
+            fprintf(source, "    default:\n");
+            fprintf(source, "        break;\n");
+            fprintf(source, "    }\n");
+            fprintf(source, "    if (!skip_body_len_check) {\n");
+            fprintf(source, "        rc = __unmarshall_uint32_t_vector(&expected_body_len, cursor, dbuf);\n");
+            fprintf(source, "        if (unlikely(rc < 0)) return rc;\n");
+            fprintf(source, "        len += rc;\n");
+            fprintf(source, "        body_start_len = len;\n");
+            fprintf(source, "    }\n");
+        }
 
         fprintf(source, "    switch (out->%s) {\n", xdr_unionp->pivot_name);
 
@@ -2258,6 +2401,12 @@ main(
         }
 
         fprintf(source, "    }\n");
+
+        if (xdr_unionp->opaque) {
+            /* Verify consumed bytes match expected length (unless skipped) */
+            fprintf(source, "    if (!skip_body_len_check && unlikely((uint32_t)(len - body_start_len) != expected_body_len)) return -1;\n");
+        }
+
         fprintf(source, "    return len;\n");
         fprintf(source, "}\n\n");
 
@@ -2272,7 +2421,53 @@ main(
         fprintf(source, "    xdr_dbuf *dbuf) {\n");
         fprintf(source, "    int rc, len = 0;\n");
 
+        if (xdr_unionp->opaque) {
+            fprintf(source, "    uint32_t expected_body_len = 0;\n");
+            fprintf(source, "    int body_start_len = 0;\n");
+            fprintf(source, "    int skip_body_len_check = 0;\n");
+        }
+
         emit_unmarshall_contig(source, xdr_unionp->pivot_name, xdr_unionp->pivot_type);
+
+        if (xdr_unionp->opaque) {
+            /*
+             * For opaque unions, read the body length, but skip for varlen
+             * opaque types which have their own length prefix.
+             */
+            fprintf(source, "    switch (out->%s) {\n", xdr_unionp->pivot_name);
+
+            DL_FOREACH(xdr_unionp->cases, xdr_union_casep)
+            {
+                if (strcmp(xdr_union_casep->label, "default") != 0) {
+                    if (is_varlen_opaque(xdr_union_casep->type)) {
+                        fprintf(source, "    case %s:\n", xdr_union_casep->label);
+                        fprintf(source, "        skip_body_len_check = 1;\n");
+                        fprintf(source, "        break;\n");
+                    }
+                }
+            }
+
+            DL_FOREACH(xdr_unionp->cases, xdr_union_casep)
+            {
+                if (strcmp(xdr_union_casep->label, "default") == 0) {
+                    if (is_varlen_opaque(xdr_union_casep->type)) {
+                        fprintf(source, "    default:\n");
+                        fprintf(source, "        skip_body_len_check = 1;\n");
+                        fprintf(source, "        break;\n");
+                    }
+                }
+            }
+
+            fprintf(source, "    default:\n");
+            fprintf(source, "        break;\n");
+            fprintf(source, "    }\n");
+            fprintf(source, "    if (!skip_body_len_check) {\n");
+            fprintf(source, "        rc = __unmarshall_uint32_t_contig(&expected_body_len, cursor, dbuf);\n");
+            fprintf(source, "        if (unlikely(rc < 0)) return rc;\n");
+            fprintf(source, "        len += rc;\n");
+            fprintf(source, "        body_start_len = len;\n");
+            fprintf(source, "    }\n");
+        }
 
         fprintf(source, "    switch (out->%s) {\n", xdr_unionp->pivot_name);
 
@@ -2305,6 +2500,12 @@ main(
         }
 
         fprintf(source, "    }\n");
+
+        if (xdr_unionp->opaque) {
+            /* Verify consumed bytes match expected length (unless skipped) */
+            fprintf(source, "    if (!skip_body_len_check && unlikely((uint32_t)(len - body_start_len) != expected_body_len)) return -1;\n");
+        }
+
         fprintf(source, "    return len;\n");
         fprintf(source, "}\n\n");
 
