@@ -1489,7 +1489,8 @@ emit_program(
                         reply_type_buf);
             }
         } else {
-            fprintf(source, "    void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, int status, void *callback_private_data),\n");
+            fprintf(source,
+                    "    void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, int status, void *callback_private_data),\n");
         }
 
 
@@ -2409,7 +2410,8 @@ main(
 
         if (xdr_unionp->opaque) {
             /* Verify consumed bytes match expected length (unless skipped) */
-            fprintf(source, "    if (!skip_body_len_check && unlikely((uint32_t)(len - body_start_len) != expected_body_len)) return -1;\n");
+            fprintf(source,
+                    "    if (!skip_body_len_check && unlikely((uint32_t)(len - body_start_len) != expected_body_len)) return -1;\n");
         }
 
         fprintf(source, "    return len;\n");
@@ -2508,7 +2510,8 @@ main(
 
         if (xdr_unionp->opaque) {
             /* Verify consumed bytes match expected length (unless skipped) */
-            fprintf(source, "    if (!skip_body_len_check && unlikely((uint32_t)(len - body_start_len) != expected_body_len)) return -1;\n");
+            fprintf(source,
+                    "    if (!skip_body_len_check && unlikely((uint32_t)(len - body_start_len) != expected_body_len)) return -1;\n");
         }
 
         fprintf(source, "    return len;\n");

@@ -49,10 +49,12 @@ struct xdr_dbuf {
     int   used;
 };
 typedef struct xdr_dbuf xdr_dbuf;
-#endif
+#endif // ifndef XDR_DBUF_DEFINED
 
 static inline void
-xdr_dbuf_init(xdr_dbuf *dbuf, int bytes)
+xdr_dbuf_init(
+    xdr_dbuf *dbuf,
+    int       bytes)
 {
     dbuf->buffer = malloc(bytes);
     dbuf->used   = 0;
