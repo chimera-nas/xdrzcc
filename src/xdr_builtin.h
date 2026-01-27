@@ -41,11 +41,34 @@ typedef struct {
     void    *data;
 } xdr_opaque;
 
-typedef struct {
+#ifndef XDR_DBUF_DEFINED
+#define XDR_DBUF_DEFINED
+struct xdr_dbuf {
     void *buffer;
     int   size;
     int   used;
-} xdr_dbuf;
+};
+typedef struct xdr_dbuf xdr_dbuf;
+#endif // ifndef XDR_DBUF_DEFINED
+
+static inline void
+xdr_dbuf_init(
+    xdr_dbuf *dbuf,
+    int       bytes)
+{
+    dbuf->buffer = malloc(bytes);
+    dbuf->used   = 0;
+    dbuf->size   = bytes;
+} /* xdr_dbuf_init */
+
+static inline void
+xdr_dbuf_destroy(xdr_dbuf *dbuf)
+{
+    free(dbuf->buffer);
+    dbuf->buffer = NULL;
+    dbuf->size   = 0;
+    dbuf->used   = 0;
+} /* xdr_dbuf_destroy */
 
 static inline xdr_dbuf *
 xdr_dbuf_alloc(int bytes)
@@ -53,11 +76,7 @@ xdr_dbuf_alloc(int bytes)
     xdr_dbuf *dbuf;
 
     dbuf = (xdr_dbuf *) malloc(sizeof(*dbuf));
-
-    dbuf->buffer = malloc(bytes);
-
-    dbuf->used = 0;
-    dbuf->size = bytes;
+    xdr_dbuf_init(dbuf, bytes);
 
     return dbuf;
 } /* xdr_dbuf_alloc */
@@ -65,7 +84,7 @@ xdr_dbuf_alloc(int bytes)
 static inline void
 xdr_dbuf_free(xdr_dbuf *dbuf)
 {
-    free(dbuf->buffer);
+    xdr_dbuf_destroy(dbuf);
     free(dbuf);
 } /* xdr_dbuf_free */
 
