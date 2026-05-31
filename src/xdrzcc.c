@@ -1298,11 +1298,31 @@ emit_program(
 
         /* Call has an argument */
         if (strcmp(functionp->reply_type->name, "void")) {
+            /* A reply that fails to decode (truncated / malformed / wrong
+             * length) is a peer fault, not a server bug: deliver it to the
+             * callback as EVPL_RPC2_REPLY_DECODE_ERROR (reply NULL, or a zero
+             * value for a by-value reply) and return success, so the caller's
+             * completion runs and cleans up rather than rpc2.c aborting the
+             * whole process.  The callback is declared up front so the error
+             * paths can reach it.  `err_reply` is the reply argument passed on
+             * the error path. */
+            int         byvalue   = is_byvalue_builtin(functionp->reply_type);
+            const char *err_reply = byvalue ? "0" : "NULL";
+
             fprintf(source, "        {\n");
             /* We will unmarshall argument into provided buffer */
             fprintf(source, "        %s *%s_arg;\n",
                     reply_type_buf,
                     functionp->name);
+            if (byvalue) {
+                fprintf(source,
+                        "        void (*callback_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s reply, int status, void *callback_private_data) = callback_fn;\n",
+                        functionp->name, reply_type_buf);
+            } else {
+                fprintf(source,
+                        "        void (*callback_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s *reply, int status, void *callback_private_data) = callback_fn;\n",
+                        functionp->name, reply_type_buf);
+            }
             if (functionp->reply_type->array) {
                 fprintf(source, "        %s_arg = xdr_dbuf_alloc_space(sizeof(*%s_arg) * %s, dbuf);\n",
                         functionp->name, functionp->name, functionp->reply_type->array_size);
@@ -1323,7 +1343,9 @@ emit_program(
                 fprintf(source,
                         "                    int _rc = __unmarshall_%s_contig(&%s_arg[_i], &cursor, dbuf);\n",
                         functionp->reply_type->name, functionp->name);
-                fprintf(source, "                    if (unlikely(_rc < 0)) return 2;\n");
+                fprintf(source,
+                        "                    if (unlikely(_rc < 0)) { callback_%s(evpl, verf, %s, EVPL_RPC2_REPLY_DECODE_ERROR, callback_private_data); return 0; }\n",
+                        functionp->name, err_reply);
                 fprintf(source, "                    len += _rc;\n");
                 fprintf(source, "                }\n");
                 fprintf(source, "            } else {\n");
@@ -1333,7 +1355,9 @@ emit_program(
                 fprintf(source,
                         "                    int _rc = __unmarshall_%s_vector(&%s_arg[_i], &cursor, dbuf);\n",
                         functionp->reply_type->name, functionp->name);
-                fprintf(source, "                    if (unlikely(_rc < 0)) return 2;\n");
+                fprintf(source,
+                        "                    if (unlikely(_rc < 0)) { callback_%s(evpl, verf, %s, EVPL_RPC2_REPLY_DECODE_ERROR, callback_private_data); return 0; }\n",
+                        functionp->name, err_reply);
                 fprintf(source, "                    len += _rc;\n");
                 fprintf(source, "                }\n");
                 fprintf(source, "            }\n");
@@ -1343,21 +1367,16 @@ emit_program(
                         "        len = unmarshall_%s(%s_arg, iov, niov, read_chunk, dbuf);\n",
                         functionp->reply_type->name, functionp->name);
             }
-            fprintf(source, "        if (unlikely(len != length)) return 2;\n");
-            fprintf(source, "        if (len < 0) return 2;\n");
+            fprintf(source,
+                    "        if (unlikely(len != length || len < 0)) { callback_%s(evpl, verf, %s, EVPL_RPC2_REPLY_DECODE_ERROR, callback_private_data); return 0; }\n",
+                    functionp->name, err_reply);
 
             /* Then make the call - builtin scalars are passed by value */
-            if (is_byvalue_builtin(functionp->reply_type)) {
-                fprintf(source,
-                        " void (*callback_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s reply, int status, void *callback_private_data) = callback_fn;\n",
-                        functionp->name, reply_type_buf);
+            if (byvalue) {
                 fprintf(source,
                         "        callback_%s(evpl, verf, *%s_arg, 0, callback_private_data);\n",
                         functionp->name, functionp->name);
             } else {
-                fprintf(source,
-                        " void (*callback_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s *reply, int status, void *callback_private_data) = callback_fn;\n",
-                        functionp->name, reply_type_buf);
                 fprintf(source,
                         "        callback_%s(evpl, verf, %s_arg, 0, callback_private_data);\n",
                         functionp->name, functionp->name);
