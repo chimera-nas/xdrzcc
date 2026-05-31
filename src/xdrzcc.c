@@ -990,7 +990,7 @@ emit_program_header(
             if (strcmp(functionp->reply_type->name, "void")) {
                 if (is_byvalue_builtin(functionp->reply_type)) {
                     fprintf(header,
-                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, const struct evpl_rpc2_cred *cred, %s%s, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, const struct evpl_rpc2_cred *cred, %s%s, int ddp, int max_rdma_write_chunk, struct evpl_iovec *write_chunk_iov, int write_chunk_niov, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s reply, int status, void *callback_private_data), void *callback_private_data);\n",
                             functionp->name,
                             call_type_buf,
                             call_ptr,
@@ -998,7 +998,7 @@ emit_program_header(
                             );
                 } else {
                     fprintf(header,
-                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, const struct evpl_rpc2_cred *cred, %s%s, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, const struct evpl_rpc2_cred *cred, %s%s, int ddp, int max_rdma_write_chunk, struct evpl_iovec *write_chunk_iov, int write_chunk_niov, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
                             functionp->name,
                             call_type_buf,
                             call_ptr,
@@ -1007,7 +1007,7 @@ emit_program_header(
                 }
             } else {
                 fprintf(header,
-                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, const struct evpl_rpc2_cred *cred, %s%s, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, int status, void *callback_private_data), void *callback_private_data);\n",
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, const struct evpl_rpc2_cred *cred, %s%s, int ddp, int max_rdma_write_chunk, struct evpl_iovec *write_chunk_iov, int write_chunk_niov, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, int status, void *callback_private_data), void *callback_private_data);\n",
                         functionp->name,
                         call_type_buf,
                         call_ptr
@@ -1018,20 +1018,20 @@ emit_program_header(
             if (strcmp(functionp->reply_type->name, "void")) {
                 if (is_byvalue_builtin(functionp->reply_type)) {
                     fprintf(header,
-                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, const struct evpl_rpc2_cred *cred, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, const struct evpl_rpc2_cred *cred, int ddp, int max_rdma_write_chunk, struct evpl_iovec *write_chunk_iov, int write_chunk_niov, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s reply, int status, void *callback_private_data), void *callback_private_data);\n",
                             functionp->name,
                             reply_type_buf
                             );
                 } else {
                     fprintf(header,
-                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, const struct evpl_rpc2_cred *cred, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
+                            "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, const struct evpl_rpc2_cred *cred, int ddp, int max_rdma_write_chunk, struct evpl_iovec *write_chunk_iov, int write_chunk_niov, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s *reply, int status, void *callback_private_data), void *callback_private_data);\n",
                             functionp->name,
                             reply_type_buf
                             );
                 }
             } else {
                 fprintf(header,
-                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, const struct evpl_rpc2_cred *cred, int ddp, int max_rdma_write_chunk, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, int status, void *callback_private_data), void *callback_private_data);\n",
+                        "   void (*send_call_%s)(struct evpl_rpc2_program *program, struct evpl *evpl, struct evpl_rpc2_conn *conn, const struct evpl_rpc2_cred *cred, int ddp, int max_rdma_write_chunk, struct evpl_iovec *write_chunk_iov, int write_chunk_niov, int max_rdma_reply_chunk, void (*callback)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, int status, void *callback_private_data), void *callback_private_data);\n",
                         functionp->name
                         );
 
@@ -1495,6 +1495,8 @@ emit_program(
 
         fprintf(source, "    int ddp,\n");
         fprintf(source, "    int max_rdma_write_chunk,\n");
+        fprintf(source, "    struct evpl_iovec *write_chunk_iov,\n");
+        fprintf(source, "    int write_chunk_niov,\n");
         fprintf(source, "    int max_rdma_reply_chunk,\n");
 
         if (has_reply_args) {
@@ -1551,7 +1553,7 @@ emit_program(
                     "    evpl_iovec_release(evpl, &iov);\n");
 
             fprintf(source, "    evpl_rpc2_call(evpl, program, conn, cred, %d, "
-                    "msg_iov, msg_niov, len, conn->rdma && ddp ? &rdma_chunk : NULL, max_rdma_write_chunk, max_rdma_reply_chunk, callback, callback_private_data);\n",
+                    "msg_iov, msg_niov, len, conn->rdma && ddp ? &rdma_chunk : NULL, max_rdma_write_chunk, write_chunk_iov, write_chunk_niov, max_rdma_reply_chunk, callback, callback_private_data);\n",
                     functionp->id);
         } else {
 
@@ -1560,7 +1562,7 @@ emit_program(
             fprintf(source, "    niov = evpl_iovec_alloc(evpl, program->reserve, 8, 1, 0, &iov);\n");
 
             fprintf(source, "    evpl_rpc2_call(evpl, program, conn, cred, %d, "
-                    "&iov, niov, program->reserve,NULL, max_rdma_write_chunk, max_rdma_reply_chunk, callback, callback_private_data);\n",
+                    "&iov, niov, program->reserve,NULL, max_rdma_write_chunk, write_chunk_iov, write_chunk_niov, max_rdma_reply_chunk, callback, callback_private_data);\n",
                     functionp->id);
         }
 
