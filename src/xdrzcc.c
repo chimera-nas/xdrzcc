@@ -1401,6 +1401,71 @@ emit_program(
     fprintf(source, "    return 0;\n");
     fprintf(source, "}\n\n");
 
+    /*
+     * error_dispatch is the transport-error sibling of reply_dispatch: it is
+     * invoked when an in-flight client call is terminated without a reply (the
+     * connection was torn down).  There is no wire data to decode, so it simply
+     * delivers the supplied status to the per-proc callback with a NULL (or zero
+     * by-value) reply.  Callbacks already check status before touching the reply,
+     * exactly as on the EVPL_RPC2_REPLY_DECODE_ERROR path.
+     */
+    fprintf(source, "static int\n");
+    fprintf(source, "error_dispatch_%s(\n", version->name);
+    fprintf(source, "    struct evpl *evpl,\n");
+    fprintf(source, "    uint32_t proc,\n");
+    fprintf(source, "    int status,\n");
+    fprintf(source, "    void *callback_fn,\n");
+    fprintf(source, "    void *callback_private_data)\n");
+    fprintf(source, "{\n");
+    fprintf(source, "    switch (proc) {\n");
+
+    for (functionp = version->functions; functionp != NULL; functionp =
+             functionp->next) {
+
+        format_param_type(reply_type_buf, sizeof(reply_type_buf), functionp->reply_type);
+
+        fprintf(source, "    case %d:\n", functionp->id);
+
+        if (strcmp(functionp->reply_type->name, "void")) {
+            /* Declare the callback with the same signature reply_dispatch uses
+             * (single '*' for pointer/array replies -- never a nested '[]'), so
+             * the cast matches and err_reply is type-correct. */
+            int byvalue = is_byvalue_builtin(functionp->reply_type);
+
+            fprintf(source, "        {\n");
+            if (byvalue) {
+                fprintf(source,
+                        "        void (*callback_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s reply, int status, void *callback_private_data) = callback_fn;\n",
+                        functionp->name, reply_type_buf);
+                fprintf(source,
+                        "        callback_%s(evpl, NULL, 0, status, callback_private_data);\n",
+                        functionp->name);
+            } else {
+                fprintf(source,
+                        "        void (*callback_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s *reply, int status, void *callback_private_data) = callback_fn;\n",
+                        functionp->name, reply_type_buf);
+                fprintf(source,
+                        "        callback_%s(evpl, NULL, NULL, status, callback_private_data);\n",
+                        functionp->name);
+            }
+            fprintf(source, "        }\n");
+        } else {
+            fprintf(source,
+                    " void (*callback_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, int status, void *callback_private_data) = callback_fn;\n",
+                    functionp->name);
+            fprintf(source,
+                    "        callback_%s(evpl, NULL, status, callback_private_data);\n",
+                    functionp->name);
+        }
+        fprintf(source, "        break;\n\n");
+    }
+
+    fprintf(source, "    default:\n");
+    fprintf(source, "        return 2;\n");
+    fprintf(source, "    }\n");
+    fprintf(source, "    return 0;\n");
+    fprintf(source, "}\n\n");
+
     for (functionp = version->functions; functionp != NULL; functionp =
              functionp->next) {
         format_param_type(reply_type_buf, sizeof(reply_type_buf), functionp->reply_type);
@@ -1583,6 +1648,8 @@ emit_program(
     fprintf(source, "    prog->rpc2.recv_call_dispatch = call_dispatch_%s;\n",
             version->name);
     fprintf(source, "    prog->rpc2.recv_reply_dispatch = reply_dispatch_%s;\n",
+            version->name);
+    fprintf(source, "    prog->rpc2.recv_reply_error = error_dispatch_%s;\n",
             version->name);
 
     for (functionp = version->functions; functionp != NULL; functionp =
