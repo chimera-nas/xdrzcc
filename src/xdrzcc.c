@@ -404,11 +404,9 @@ emit_unmarshall_contig(
                 "        rc = __unmarshall_%s_contig(out->%s, cursor, dbuf);\n",
                 type->name, name);
         fprintf(output, "        if (unlikely(rc < 0)) return rc;\n");
-        fprintf(output, "        len += rc;\n");
         fprintf(output, "        } else {\n");
         fprintf(output, "            out->%s = NULL;\n", name);
         fprintf(output, "        };\n");
-        fprintf(output, "        rc = 0;\n");
         fprintf(output, "    }\n");
     } else if (type->vector) {
         fprintf(output,
