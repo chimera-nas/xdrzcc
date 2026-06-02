@@ -408,6 +408,7 @@ emit_unmarshall_contig(
         fprintf(output, "        } else {\n");
         fprintf(output, "            out->%s = NULL;\n", name);
         fprintf(output, "        };\n");
+        fprintf(output, "        rc = 0;\n");
         fprintf(output, "    }\n");
     } else if (type->vector) {
         fprintf(output,
