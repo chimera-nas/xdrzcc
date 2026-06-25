@@ -96,16 +96,21 @@ xdr_dbuf_reset(xdr_dbuf *dbuf)
 
 static FORCE_INLINE void * WARN_UNUSED_RESULT
 xdr_dbuf_alloc_space(
-    int       isize,
+    size_t    isize,
     xdr_dbuf *dbuf)
 {
     void *ptr;
 
-    if (unlikely(dbuf->used + isize > dbuf->size)) {
+    /* isize is size_t so a caller's 64-bit size product (e.g. a wire-supplied
+     * array count times the element size) is compared at full width.  Taking it
+     * as int truncated the product, letting an attacker-controlled count defeat
+     * this bounds check and drive a heap overflow.  Compare in size_t and reject
+     * anything that does not fit the remaining buffer. */
+    if (unlikely((size_t) dbuf->used + isize > (size_t) dbuf->size)) {
         return NULL;
     }
     ptr         = (char *) dbuf->buffer + dbuf->used;
-    dbuf->used += isize;
+    dbuf->used += (int) isize;
     dbuf->used  = (dbuf->used + 7) & ~7;
     return ptr;
 } // xdr_dbuf_alloc_space
