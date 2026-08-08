@@ -1278,6 +1278,7 @@ emit_program(
     fprintf(source, "    xdr_iovec *iov,\n");
     fprintf(source, "    int niov,\n");
     fprintf(source, "    int length,\n");
+    fprintf(source, "    int status,\n");
     fprintf(source, "    void *callback_fn,\n");
     fprintf(source, "    void *callback_private_data)\n");
     fprintf(source, "{\n");
@@ -1322,6 +1323,13 @@ emit_program(
                         "        void (*callback_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, %s *reply, int status, void *callback_private_data) = callback_fn;\n",
                         functionp->name, reply_type_buf);
             }
+            /* A non-zero status means the call failed before any results
+             * existed to decode -- the peer refused it, or the connection went
+             * away.  Complete the caller with that status and no reply rather
+             * than trying to unmarshall a body that is not there. */
+            fprintf(source,
+                    "        if (unlikely(status)) { callback_%s(evpl, verf, %s, status, callback_private_data); return 0; }\n",
+                    functionp->name, err_reply);
             if (functionp->reply_type->array) {
                 fprintf(source, "        %s_arg = xdr_dbuf_alloc_space(sizeof(*%s_arg) * %s, dbuf);\n",
                         functionp->name, functionp->name, functionp->reply_type->array_size);
@@ -1385,9 +1393,10 @@ emit_program(
             fprintf(source,
                     " void (*callback_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, int status, void *callback_private_data) = callback_fn;\n",
                     functionp->name);
-            /* No argument, just make the call */
+            /* No argument, just make the call.  A void reply has no body to
+             * decode, so success and failure differ only in the status. */
             fprintf(source,
-                    "        callback_%s(evpl, verf, 0, callback_private_data);\n",
+                    "        callback_%s(evpl, verf, status, callback_private_data);\n",
                     functionp->name);
 
         }
