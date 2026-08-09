@@ -679,6 +679,7 @@ __marshall_xdr_string(
 static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_xdr_string_vector(
     xdr_string             *str,
+    uint32_t                bound,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
@@ -691,6 +692,14 @@ __unmarshall_xdr_string_vector(
     }
 
     len += rc;
+
+    /* RFC 4506: a string declared with a bound may not carry more than that.
+     * The length is unauthenticated input, so refuse an over-bound value
+     * before it is used to alias or copy anything.  A bound of 0 means the
+     * declaration set none. */
+    if (unlikely(bound && str->len > bound)) {
+        return -1;
+    }
 
     if (xdr_iovec_len(cursor->cur) - cursor->iov_offset >= str->len) {
         str->str            = xdr_iovec_data(cursor->cur) + cursor->iov_offset;
@@ -735,6 +744,7 @@ __unmarshall_xdr_string_vector(
 static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_xdr_string_contig(
     xdr_string             *str,
+    uint32_t                bound,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
@@ -745,6 +755,14 @@ __unmarshall_xdr_string_contig(
         return rc;
     }
     len += rc;
+
+    /* RFC 4506: a string declared with a bound may not carry more than that.
+     * The length is unauthenticated input, so refuse an over-bound value
+     * before it is used to alias or copy anything.  A bound of 0 means the
+     * declaration set none. */
+    if (unlikely(bound && str->len > bound)) {
+        return -1;
+    }
 
     pad = (4 - (str->len & 0x3)) & 0x3;
     /* Computed in 64 bits deliberately: iov_offset, the length and the pad are
@@ -1011,6 +1029,13 @@ __unmarshall_opaque_vector(
         return rc;
     }
 
+    /* RFC 4506: an opaque declared with a bound may not carry more than that.
+     * The length is unauthenticated input, so refuse an over-bound value here
+     * instead of aliasing or copying it.  A bound of 0 means unbounded. */
+    if (unlikely(bound && v->len > bound)) {
+        return -1;
+    }
+
     if (xdr_iovec_len(cursor->cur) - cursor->iov_offset >= v->len) {
         v->data             = xdr_iovec_data(cursor->cur) + cursor->iov_offset;
         cursor->iov_offset += v->len;
@@ -1058,6 +1083,12 @@ __unmarshall_opaque_contig(
     rc = __unmarshall_uint32_t_contig(&v->len, cursor, dbuf);
     if (unlikely(rc < 0)) {
         return rc;
+    }
+    /* RFC 4506: an opaque declared with a bound may not carry more than that.
+     * The length is unauthenticated input, so refuse an over-bound value here
+     * instead of aliasing or copying it.  A bound of 0 means unbounded. */
+    if (unlikely(bound && v->len > bound)) {
+        return -1;
     }
     len += rc;
 

@@ -211,9 +211,14 @@ emit_unmarshall(
                     name, type->vector_bound ? type->vector_bound : "0");
         }
     } else if (strcmp(type->name, "xdr_string") == 0) {
+        /* A bounded string keeps its bound here: the declaration reaches
+         * codegen as vector_bound even though a string is a single field
+         * rather than an array, and the decoder needs it to reject an
+         * over-long value.  0 means the declaration set no bound. */
         fprintf(output,
-                "    rc = __unmarshall_%s_vector(&out->%s, cursor, dbuf);\n",
-                type->name, name);
+                "    rc = __unmarshall_%s_vector(&out->%s, %s, cursor, dbuf);\n",
+                type->name, name,
+                type->vector_bound ? type->vector_bound : "0");
     } else if (type->linkedlist) {
 
         HASH_FIND_STR(xdr_identifiers, type->name, chk);
@@ -281,6 +286,15 @@ emit_unmarshall(
                 name);
         fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "    len += rc;\n");
+        if (type->vector_bound) {
+            /* RFC 4506: a counted field declared with a bound may not
+             * exceed it.  The count is unauthenticated input and is
+             * used to size an allocation, so reject it before the
+             * allocation rather than trusting the arena to fail. */
+            fprintf(output,
+                    "    if (unlikely(out->num_%s > %s)) return -1;\n",
+                    name, type->vector_bound);
+        }
         fprintf(output, "     out->%s = xdr_dbuf_alloc_space(out->num_%s * sizeof(*out->%s), dbuf);\n",
                 name, name, name);
         fprintf(output, "     if (unlikely(out->%s == NULL)) return -1;\n", name);
@@ -343,8 +357,9 @@ emit_unmarshall_contig(
         }
     } else if (strcmp(type->name, "xdr_string") == 0) {
         fprintf(output,
-                "    rc = __unmarshall_%s_contig(&out->%s, cursor, dbuf);\n",
-                type->name, name);
+                "    rc = __unmarshall_%s_contig(&out->%s, %s, cursor, dbuf);\n",
+                type->name, name,
+                type->vector_bound ? type->vector_bound : "0");
         fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
     } else if (type->linkedlist) {
 
@@ -414,6 +429,15 @@ emit_unmarshall_contig(
                 name);
         fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "    len += rc;\n");
+        if (type->vector_bound) {
+            /* RFC 4506: a counted field declared with a bound may not
+             * exceed it.  The count is unauthenticated input and is
+             * used to size an allocation, so reject it before the
+             * allocation rather than trusting the arena to fail. */
+            fprintf(output,
+                    "    if (unlikely(out->num_%s > %s)) return -1;\n",
+                    name, type->vector_bound);
+        }
         fprintf(output, "     out->%s = xdr_dbuf_alloc_space(out->num_%s * sizeof(*out->%s), dbuf);\n",
                 name, name, name);
         fprintf(output, "     if (unlikely(out->%s == NULL)) return -1;\n", name);
@@ -948,6 +972,17 @@ format_param_type(
     }
 } /* format_param_type */
 
+/*
+ * The string decoders take a declared bound as their second argument;
+ * every other builtin decoder does not.  Returns the argument text to
+ * splice in for a type used where no bound is available.
+ */
+static const char *
+string_bound_arg(struct xdr_type *type)
+{
+    return strcmp(type->name, "xdr_string") == 0 ? ", 0" : "";
+} /* string_bound_arg */
+
 /* Check if type is a builtin scalar that should be returned by value in callbacks */
 static int
 is_byvalue_builtin(struct xdr_type *type)
@@ -1159,10 +1194,16 @@ emit_program(
                     fprintf(source, "    struct xdr_read_cursor cursor;\n");
                     fprintf(source, "    if (niov == 1) {\n");
                     fprintf(source, "        xdr_read_cursor_contig_init(&cursor, iov, rdma_chunk);\n");
-                    fprintf(source, "        return __unmarshall_%s_contig(out, &cursor, dbuf);\n", type->name);
+                    /* A builtin used directly as a procedure argument or
+                     * result has no declaration to carry a bound, and this
+                     * wrapper is emitted once per type rather than per use,
+                     * so the bounded-string decoders are called unbounded. */
+                    fprintf(source, "        return __unmarshall_%s_contig(out%s, &cursor, dbuf);\n",
+                            type->name, string_bound_arg(type));
                     fprintf(source, "    } else {\n");
                     fprintf(source, "        xdr_read_cursor_vector_init(&cursor, iov, niov, rdma_chunk);\n");
-                    fprintf(source, "        return __unmarshall_%s_vector(out, &cursor, dbuf);\n", type->name);
+                    fprintf(source, "        return __unmarshall_%s_vector(out%s, &cursor, dbuf);\n",
+                            type->name, string_bound_arg(type));
                     fprintf(source, "    }\n");
                     fprintf(source, "}\n\n");
 
