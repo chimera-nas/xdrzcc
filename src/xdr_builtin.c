@@ -784,6 +784,18 @@ __unmarshall_opaque_fixed_vector(
 {
     int pad, chunk, left = size;
 
+    /* A zero-length payload describes no bytes, so it must not carry a
+     * buffer reference.  Handing one back would oblige the receiver to
+     * release an iovec covering nothing, and a sender echoing it onward would
+     * strand that reference, since the marshaller only takes iovecs while
+     * bytes remain.  Report no iovecs instead. */
+    if (size == 0) {
+        v->iov    = NULL;
+        v->niov   = 0;
+        v->length = 0;
+        return 0;
+    }
+
     v->iov = xdr_dbuf_alloc_space(sizeof(*v->iov) * ((cursor->last - cursor->cur) + 1), dbuf);
     if (unlikely(v->iov == NULL)) {
         return -1;
@@ -837,6 +849,18 @@ __unmarshall_opaque_fixed_contig(
     xdr_dbuf               *dbuf)
 {
     int pad;
+
+    /* A zero-length payload describes no bytes, so it must not carry a
+     * buffer reference.  Handing one back would oblige the receiver to
+     * release an iovec covering nothing, and a sender echoing it onward would
+     * strand that reference, since the marshaller only takes iovecs while
+     * bytes remain.  Report no iovecs instead. */
+    if (size == 0) {
+        v->iov    = NULL;
+        v->niov   = 0;
+        v->length = 0;
+        return 0;
+    }
 
     pad = (4 - (size & 0x3)) & 0x3;
     /* Computed in 64 bits deliberately: iov_offset, the length and the pad are
@@ -932,6 +956,11 @@ __marshall_opaque_zerocopy(
         return rc;
     }
 
+    /* Note the `left` guard: an iovec the caller hands over past the declared
+     * length is never taken, so its reference would be stranded.  The decoders
+     * therefore report niov == 0 for a zero-length payload rather than handing
+     * back an iovec describing no bytes, which is what previously made every
+     * empty zcopaque leak one reference. */
     for (i = 0; i < v->niov && left; ++i) {
 
         if (unlikely(cursor->niov + 1 > cursor->maxiov)) {
