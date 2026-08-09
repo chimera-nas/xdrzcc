@@ -32,6 +32,11 @@ struct xdr_type {
     int   vector;
     int   array;
     int   enumeration;
+    /* For an enumeration member, the declared enum's name.  `name` is
+     * rewritten to uint32_t once the struct member has been emitted, so the
+     * link back to the enum -- and therefore to the set of values the member
+     * is allowed to hold -- has to be kept separately. */
+    char *enum_name;
 };
 
 struct xdr_typedef {

@@ -392,6 +392,13 @@ __unmarshall_xdr_bool_vector(
     if (unlikely(rc < 0)) {
         return rc;
     }
+    /* RFC 4506: a boolean is an enumeration over exactly TRUE (1) and FALSE
+     * (0).  Anything else is not a value of the type, so reject it here
+     * rather than handing the caller a "boolean" it cannot switch on. */
+    if (unlikely(*v > 1)) {
+        return -1;
+    }
+
     return rc;
 } /* __unmarshall_xdr_bool_vector */
 
@@ -407,6 +414,13 @@ __unmarshall_xdr_bool_contig(
 
     if (unlikely(rc < 0)) {
         return rc;
+    }
+
+    /* RFC 4506: a boolean is an enumeration over exactly TRUE (1) and FALSE
+     * (0).  Anything else is not a value of the type, so reject it here
+     * rather than handing the caller a "boolean" it cannot switch on. */
+    if (unlikely(*v > 1)) {
+        return -1;
     }
 
     return rc;
@@ -665,6 +679,7 @@ __marshall_xdr_string(
 static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_xdr_string_vector(
     xdr_string             *str,
+    uint32_t                bound,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
@@ -677,6 +692,14 @@ __unmarshall_xdr_string_vector(
     }
 
     len += rc;
+
+    /* RFC 4506: a string declared with a bound may not carry more than that.
+     * The length is unauthenticated input, so refuse an over-bound value
+     * before it is used to alias or copy anything.  A bound of 0 means the
+     * declaration set none. */
+    if (unlikely(bound && str->len > bound)) {
+        return -1;
+    }
 
     if (xdr_iovec_len(cursor->cur) - cursor->iov_offset >= str->len) {
         str->str            = xdr_iovec_data(cursor->cur) + cursor->iov_offset;
@@ -721,6 +744,7 @@ __unmarshall_xdr_string_vector(
 static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_xdr_string_contig(
     xdr_string             *str,
+    uint32_t                bound,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
@@ -732,8 +756,22 @@ __unmarshall_xdr_string_contig(
     }
     len += rc;
 
+    /* RFC 4506: a string declared with a bound may not carry more than that.
+     * The length is unauthenticated input, so refuse an over-bound value
+     * before it is used to alias or copy anything.  A bound of 0 means the
+     * declaration set none. */
+    if (unlikely(bound && str->len > bound)) {
+        return -1;
+    }
+
     pad = (4 - (str->len & 0x3)) & 0x3;
-    if (unlikely(cursor->iov_offset + str->len + pad > xdr_iovec_len(cursor->cur))) {
+    /* Computed in 64 bits deliberately: iov_offset, the length and the pad are
+     * all 32-bit, so a hostile length near UINT32_MAX makes len + pad wrap to
+     * a small value and the comparison succeed, handing back a pointer with a
+     * multi-gigabyte length into a receive buffer.  The length is straight off
+     * the wire, so this is reachable before any authentication. */
+    if (unlikely((uint64_t) cursor->iov_offset + str->len + pad >
+                 (uint64_t) xdr_iovec_len(cursor->cur))) {
         return -1;
     }
 
@@ -763,6 +801,18 @@ __unmarshall_opaque_fixed_vector(
     xdr_dbuf               *dbuf)
 {
     int pad, chunk, left = size;
+
+    /* A zero-length payload describes no bytes, so it must not carry a
+     * buffer reference.  Handing one back would oblige the receiver to
+     * release an iovec covering nothing, and a sender echoing it onward would
+     * strand that reference, since the marshaller only takes iovecs while
+     * bytes remain.  Report no iovecs instead. */
+    if (size == 0) {
+        v->iov    = NULL;
+        v->niov   = 0;
+        v->length = 0;
+        return 0;
+    }
 
     v->iov = xdr_dbuf_alloc_space(sizeof(*v->iov) * ((cursor->last - cursor->cur) + 1), dbuf);
     if (unlikely(v->iov == NULL)) {
@@ -818,8 +868,26 @@ __unmarshall_opaque_fixed_contig(
 {
     int pad;
 
+    /* A zero-length payload describes no bytes, so it must not carry a
+     * buffer reference.  Handing one back would oblige the receiver to
+     * release an iovec covering nothing, and a sender echoing it onward would
+     * strand that reference, since the marshaller only takes iovecs while
+     * bytes remain.  Report no iovecs instead. */
+    if (size == 0) {
+        v->iov    = NULL;
+        v->niov   = 0;
+        v->length = 0;
+        return 0;
+    }
+
     pad = (4 - (size & 0x3)) & 0x3;
-    if (unlikely(cursor->iov_offset + size + pad > xdr_iovec_len(cursor->cur))) {
+    /* Computed in 64 bits deliberately: iov_offset, the length and the pad are
+     * all 32-bit, so a hostile length near UINT32_MAX makes len + pad wrap to
+     * a small value and the comparison succeed, handing back a pointer with a
+     * multi-gigabyte length into a receive buffer.  The length is straight off
+     * the wire, so this is reachable before any authentication. */
+    if (unlikely((uint64_t) cursor->iov_offset + size + pad >
+                 (uint64_t) xdr_iovec_len(cursor->cur))) {
         return -1;
     }
 
@@ -906,6 +974,11 @@ __marshall_opaque_zerocopy(
         return rc;
     }
 
+    /* Note the `left` guard: an iovec the caller hands over past the declared
+     * length is never taken, so its reference would be stranded.  The decoders
+     * therefore report niov == 0 for a zero-length payload rather than handing
+     * back an iovec describing no bytes, which is what previously made every
+     * empty zcopaque leak one reference. */
     for (i = 0; i < v->niov && left; ++i) {
 
         if (unlikely(cursor->niov + 1 > cursor->maxiov)) {
@@ -956,6 +1029,13 @@ __unmarshall_opaque_vector(
         return rc;
     }
 
+    /* RFC 4506: an opaque declared with a bound may not carry more than that.
+     * The length is unauthenticated input, so refuse an over-bound value here
+     * instead of aliasing or copying it.  A bound of 0 means unbounded. */
+    if (unlikely(bound && v->len > bound)) {
+        return -1;
+    }
+
     if (xdr_iovec_len(cursor->cur) - cursor->iov_offset >= v->len) {
         v->data             = xdr_iovec_data(cursor->cur) + cursor->iov_offset;
         cursor->iov_offset += v->len;
@@ -1004,10 +1084,23 @@ __unmarshall_opaque_contig(
     if (unlikely(rc < 0)) {
         return rc;
     }
+
+    /* RFC 4506: an opaque declared with a bound may not carry more than that.
+     * The length is unauthenticated input, so refuse an over-bound value here
+     * instead of aliasing or copying it.  A bound of 0 means unbounded. */
+    if (unlikely(bound && v->len > bound)) {
+        return -1;
+    }
     len += rc;
 
     pad = (4 - (v->len & 0x3)) & 0x3;
-    if (unlikely(cursor->iov_offset + v->len + pad > xdr_iovec_len(cursor->cur))) {
+    /* Computed in 64 bits deliberately: iov_offset, the length and the pad are
+     * all 32-bit, so a hostile length near UINT32_MAX makes len + pad wrap to
+     * a small value and the comparison succeed, handing back a pointer with a
+     * multi-gigabyte length into a receive buffer.  The length is straight off
+     * the wire, so this is reachable before any authentication. */
+    if (unlikely((uint64_t) cursor->iov_offset + v->len + pad >
+                 (uint64_t) xdr_iovec_len(cursor->cur))) {
         return -1;
     }
 

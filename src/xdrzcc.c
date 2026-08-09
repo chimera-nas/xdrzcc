@@ -187,6 +187,12 @@ emit_marshall(
     }
 } /* emit_marshall */
 
+static void
+emit_enum_domain_check(
+    FILE            *output,
+    const char      *name,
+    struct xdr_type *type);
+
 void
 emit_unmarshall(
     FILE            *output,
@@ -211,9 +217,14 @@ emit_unmarshall(
                     name, type->vector_bound ? type->vector_bound : "0");
         }
     } else if (strcmp(type->name, "xdr_string") == 0) {
+        /* A bounded string keeps its bound here: the declaration reaches
+         * codegen as vector_bound even though a string is a single field
+         * rather than an array, and the decoder needs it to reject an
+         * over-long value.  0 means the declaration set no bound. */
         fprintf(output,
-                "    rc = __unmarshall_%s_vector(&out->%s, cursor, dbuf);\n",
-                type->name, name);
+                "    rc = __unmarshall_%s_vector(&out->%s, %s, cursor, dbuf);\n",
+                type->name, name,
+                type->vector_bound ? type->vector_bound : "0");
     } else if (type->linkedlist) {
 
         HASH_FIND_STR(xdr_identifiers, type->name, chk);
@@ -281,6 +292,15 @@ emit_unmarshall(
                 name);
         fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "    len += rc;\n");
+        if (type->vector_bound) {
+            /* RFC 4506: a counted field declared with a bound may not
+             * exceed it.  The count is unauthenticated input and is
+             * used to size an allocation, so reject it before the
+             * allocation rather than trusting the arena to fail. */
+            fprintf(output,
+                    "    if (unlikely(out->num_%s > %s)) return -1;\n",
+                    name, type->vector_bound);
+        }
         fprintf(output, "     out->%s = xdr_dbuf_alloc_space(out->num_%s * sizeof(*out->%s), dbuf);\n",
                 name, name, name);
         fprintf(output, "     if (unlikely(out->%s == NULL)) return -1;\n", name);
@@ -310,6 +330,8 @@ emit_unmarshall(
 
     fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
     fprintf(output, "    len += rc;\n");
+
+    emit_enum_domain_check(output, name, type);
 } /* emit_unmarshall */
 
 void
@@ -343,8 +365,9 @@ emit_unmarshall_contig(
         }
     } else if (strcmp(type->name, "xdr_string") == 0) {
         fprintf(output,
-                "    rc = __unmarshall_%s_contig(&out->%s, cursor, dbuf);\n",
-                type->name, name);
+                "    rc = __unmarshall_%s_contig(&out->%s, %s, cursor, dbuf);\n",
+                type->name, name,
+                type->vector_bound ? type->vector_bound : "0");
         fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
     } else if (type->linkedlist) {
 
@@ -414,6 +437,15 @@ emit_unmarshall_contig(
                 name);
         fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
         fprintf(output, "    len += rc;\n");
+        if (type->vector_bound) {
+            /* RFC 4506: a counted field declared with a bound may not
+             * exceed it.  The count is unauthenticated input and is
+             * used to size an allocation, so reject it before the
+             * allocation rather than trusting the arena to fail. */
+            fprintf(output,
+                    "    if (unlikely(out->num_%s > %s)) return -1;\n",
+                    name, type->vector_bound);
+        }
         fprintf(output, "     out->%s = xdr_dbuf_alloc_space(out->num_%s * sizeof(*out->%s), dbuf);\n",
                 name, name, name);
         fprintf(output, "     if (unlikely(out->%s == NULL)) return -1;\n", name);
@@ -443,6 +475,8 @@ emit_unmarshall_contig(
     }
 
     fprintf(output, "    len += rc;\n");
+
+    emit_enum_domain_check(output, name, type);
 } /* emit_unmarshall_contig */
 
 static int
@@ -805,6 +839,32 @@ emit_length_struct(
     fprintf(source, "}\n\n");
 } /* emit_length_struct */
 
+/*
+ * Does this union declare a "default" arm?
+ *
+ * XDR (RFC 4506) allows a union to omit one.  The generated switch must still
+ * cover every value the discriminant's type can hold: without a default arm
+ * the compiler reports the switch as non-exhaustive (-Wswitch), and, more
+ * importantly, a discriminant matching no arm would otherwise be accepted
+ * silently, leaving the union's body untouched and uninitialised.  Callers
+ * use this to decide whether to synthesise a default arm -- inert for the
+ * encode paths, a hard decode failure for the decode paths.
+ */
+static int
+union_has_default(struct xdr_union *xdr_unionp)
+{
+    struct xdr_union_case *casep;
+
+    DL_FOREACH(xdr_unionp->cases, casep)
+    {
+        if (strcmp(casep->label, "default") == 0) {
+            return 1;
+        }
+    }
+
+    return 0;
+} /* union_has_default */
+
 void
 emit_dump_union(
     FILE             *source,
@@ -841,6 +901,11 @@ emit_dump_union(
             fprintf(source, "    default:\n");
             fprintf(source, "        break;\n");
         }
+    }
+
+    if (!union_has_default(xdr_unionp)) {
+        fprintf(source, "    default:\n");
+        fprintf(source, "        break;\n");
     }
 
     fprintf(source, "    }\n");
@@ -923,6 +988,11 @@ emit_length_union(
         }
     }
 
+    if (!union_has_default(xdr_unionp)) {
+        fprintf(source, "    default:\n");
+        fprintf(source, "        break;\n");
+    }
+
     fprintf(source, "    }\n");
     fprintf(source, "    return length;\n");
     fprintf(source, "}\n\n");
@@ -947,6 +1017,17 @@ format_param_type(
         snprintf(buf, bufsize, "struct %s", type->name);
     }
 } /* format_param_type */
+
+/*
+ * The string decoders take a declared bound as their second argument;
+ * every other builtin decoder does not.  Returns the argument text to
+ * splice in for a type used where no bound is available.
+ */
+static const char *
+string_bound_arg(struct xdr_type *type)
+{
+    return strcmp(type->name, "xdr_string") == 0 ? ", 0" : "";
+} /* string_bound_arg */
 
 /* Check if type is a builtin scalar that should be returned by value in callbacks */
 static int
@@ -1109,6 +1190,7 @@ emit_program(
 {
     struct xdr_function *functionp;
     int                  maxproc = 0;
+    int                  has_null_proc;
     char                 call_type_buf[256];
     char                 reply_type_buf[256];
 
@@ -1159,10 +1241,16 @@ emit_program(
                     fprintf(source, "    struct xdr_read_cursor cursor;\n");
                     fprintf(source, "    if (niov == 1) {\n");
                     fprintf(source, "        xdr_read_cursor_contig_init(&cursor, iov, rdma_chunk);\n");
-                    fprintf(source, "        return __unmarshall_%s_contig(out, &cursor, dbuf);\n", type->name);
+                    /* A builtin used directly as a procedure argument or
+                     * result has no declaration to carry a bound, and this
+                     * wrapper is emitted once per type rather than per use,
+                     * so the bounded-string decoders are called unbounded. */
+                    fprintf(source, "        return __unmarshall_%s_contig(out%s, &cursor, dbuf);\n",
+                            type->name, string_bound_arg(type));
                     fprintf(source, "    } else {\n");
                     fprintf(source, "        xdr_read_cursor_vector_init(&cursor, iov, niov, rdma_chunk);\n");
-                    fprintf(source, "        return __unmarshall_%s_vector(out, &cursor, dbuf);\n", type->name);
+                    fprintf(source, "        return __unmarshall_%s_vector(out%s, &cursor, dbuf);\n",
+                            type->name, string_bound_arg(type));
                     fprintf(source, "    }\n");
                     fprintf(source, "}\n\n");
 
@@ -1206,6 +1294,36 @@ emit_program(
             version->name);
     fprintf(source, "    int len;\n");
     fprintf(source, "    switch (proc) {\n");
+
+    /* RFC 5531 section 11.1 requires every program to implement procedure 0
+     * as NULL: no arguments, no results.  Emit it automatically unless the
+     * .x declares proc 0 itself, so that a program cannot accidentally answer
+     * PROC_UNAVAIL to the one call every client is entitled to make (it is
+     * the standard liveness probe, e.g. rpcinfo -T tcp <host> <prog>). */
+    has_null_proc = 0;
+    for (functionp = version->functions; functionp != NULL; functionp =
+             functionp->next) {
+        if (functionp->id == 0) {
+            has_null_proc = 1;
+            break;
+        }
+    }
+
+    if (!has_null_proc) {
+        fprintf(source, "    case 0:\n");
+        fprintf(source, "        /* NULL procedure (RFC 5531 11.1), generated. */\n");
+        fprintf(source, "        if (unlikely(length != 0)) return 2;\n");
+        fprintf(source, "        {\n");
+        fprintf(source, "            uint32_t null_reserve = encoding->program->reserve;\n");
+        fprintf(source, "            xdr_iovec null_iov;\n");
+        fprintf(source, "            int null_niov;\n");
+        fprintf(source,
+                "            null_niov = evpl_iovec_alloc(evpl, null_reserve, 8, 1, 0, &null_iov);\n");
+        fprintf(source,
+                "            evpl_rpc2_send_reply_dispatch(evpl, encoding, NULL, &null_iov, null_niov, null_reserve);\n");
+        fprintf(source, "        }\n");
+        fprintf(source, "        break;\n\n");
+    }
 
     for (functionp = version->functions; functionp != NULL; functionp =
              functionp->next) {
@@ -1676,10 +1794,58 @@ emit_member(
          * treat this as a builtin uint32 for
          * the purpose of marshall/unmarshall
          */
-        type->name    = "uint32_t";
-        type->builtin = 1;
+        type->enum_name = type->name;
+        type->name      = "uint32_t";
+        type->builtin   = 1;
     }
 } /* emit_member */
+
+/*
+ * Emit a decode-time domain check for an enumeration member.
+ *
+ * RFC 4506 defines an enum as carrying exactly one of its declared values;
+ * a wire value outside that set is not a value of the type.  The generated
+ * decoder reads it as a plain uint32, so without this check an undeclared
+ * value is stored and handed to application code that will switch on it and
+ * fall through every case.
+ */
+static void
+emit_enum_domain_check(
+    FILE            *output,
+    const char      *name,
+    struct xdr_type *type)
+{
+    struct xdr_identifier *chk;
+    struct xdr_enum       *xdr_enump;
+    struct xdr_enum_entry *entryp;
+
+    if (!type->enumeration || !type->enum_name || type->vector || type->array) {
+        return;
+    }
+
+    HASH_FIND_STR(xdr_identifiers, type->enum_name, chk);
+
+    if (!chk || chk->type != XDR_ENUM) {
+        return;
+    }
+
+    xdr_enump = (struct xdr_enum *) chk->ptr;
+
+    fprintf(output, "    switch (out->%s) {\n", name);
+
+    DL_FOREACH(xdr_enump->entries, entryp)
+    {
+        fprintf(output, "    case %s:\n", entryp->name);
+    }
+
+    fprintf(output, "        break;\n");
+    fprintf(output, "    default:\n");
+    fprintf(output,
+            "        /* RFC 4506: %s carries no such value. */\n",
+            type->enum_name);
+    fprintf(output, "        return -1;\n");
+    fprintf(output, "    }\n");
+} /* emit_enum_domain_check */
 
 void
 emit_wrappers(
@@ -2342,6 +2508,11 @@ main(
             }
         }
 
+        if (!union_has_default(xdr_unionp)) {
+            fprintf(source, "    default:\n");
+            fprintf(source, "        break;\n");
+        }
+
         fprintf(source, "    }\n");
         fprintf(source, "    return 0;\n");
         fprintf(source, "}\n\n");
@@ -2433,6 +2604,21 @@ main(
                     fprintf(source, "        break;\n");
                 }
             }
+        }
+
+        if (!union_has_default(xdr_unionp)) {
+            /* A union that declares no default still needs one emitted so
+             * the switch is exhaustive for the compiler.  It deliberately
+             * does nothing rather than failing the decode: an unrecognised
+             * discriminant is the application's to answer, and protocols
+             * require that.  NFSv4 must report an unknown operation as
+             * OP_ILLEGAL rather than rejecting the whole COMPOUND, and
+             * nfs_argop4 is exactly such a union.  Genuinely malformed
+             * input is still caught downstream: the arm consumes nothing,
+             * so the dispatcher's whole-message length check rejects it
+             * as GARBAGE_ARGS. */
+            fprintf(source, "    default:\n");
+            fprintf(source, "        break;\n");
         }
 
         fprintf(source, "    }\n");
@@ -2533,6 +2719,21 @@ main(
                     fprintf(source, "        break;\n");
                 }
             }
+        }
+
+        if (!union_has_default(xdr_unionp)) {
+            /* A union that declares no default still needs one emitted so
+             * the switch is exhaustive for the compiler.  It deliberately
+             * does nothing rather than failing the decode: an unrecognised
+             * discriminant is the application's to answer, and protocols
+             * require that.  NFSv4 must report an unknown operation as
+             * OP_ILLEGAL rather than rejecting the whole COMPOUND, and
+             * nfs_argop4 is exactly such a union.  Genuinely malformed
+             * input is still caught downstream: the arm consumes nothing,
+             * so the dispatcher's whole-message length check rejects it
+             * as GARBAGE_ARGS. */
+            fprintf(source, "    default:\n");
+            fprintf(source, "        break;\n");
         }
 
         fprintf(source, "    }\n");
