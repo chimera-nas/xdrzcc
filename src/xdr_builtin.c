@@ -747,7 +747,13 @@ __unmarshall_xdr_string_contig(
     len += rc;
 
     pad = (4 - (str->len & 0x3)) & 0x3;
-    if (unlikely(cursor->iov_offset + str->len + pad > xdr_iovec_len(cursor->cur))) {
+    /* Computed in 64 bits deliberately: iov_offset, the length and the pad are
+     * all 32-bit, so a hostile length near UINT32_MAX makes len + pad wrap to
+     * a small value and the comparison succeed, handing back a pointer with a
+     * multi-gigabyte length into a receive buffer.  The length is straight off
+     * the wire, so this is reachable before any authentication. */
+    if (unlikely((uint64_t) cursor->iov_offset + str->len + pad >
+                 (uint64_t) xdr_iovec_len(cursor->cur))) {
         return -1;
     }
 
@@ -833,7 +839,13 @@ __unmarshall_opaque_fixed_contig(
     int pad;
 
     pad = (4 - (size & 0x3)) & 0x3;
-    if (unlikely(cursor->iov_offset + size + pad > xdr_iovec_len(cursor->cur))) {
+    /* Computed in 64 bits deliberately: iov_offset, the length and the pad are
+     * all 32-bit, so a hostile length near UINT32_MAX makes len + pad wrap to
+     * a small value and the comparison succeed, handing back a pointer with a
+     * multi-gigabyte length into a receive buffer.  The length is straight off
+     * the wire, so this is reachable before any authentication. */
+    if (unlikely((uint64_t) cursor->iov_offset + size + pad >
+                 (uint64_t) xdr_iovec_len(cursor->cur))) {
         return -1;
     }
 
@@ -1021,7 +1033,13 @@ __unmarshall_opaque_contig(
     len += rc;
 
     pad = (4 - (v->len & 0x3)) & 0x3;
-    if (unlikely(cursor->iov_offset + v->len + pad > xdr_iovec_len(cursor->cur))) {
+    /* Computed in 64 bits deliberately: iov_offset, the length and the pad are
+     * all 32-bit, so a hostile length near UINT32_MAX makes len + pad wrap to
+     * a small value and the comparison succeed, handing back a pointer with a
+     * multi-gigabyte length into a receive buffer.  The length is straight off
+     * the wire, so this is reachable before any authentication. */
+    if (unlikely((uint64_t) cursor->iov_offset + v->len + pad >
+                 (uint64_t) xdr_iovec_len(cursor->cur))) {
         return -1;
     }
 
