@@ -392,6 +392,13 @@ __unmarshall_xdr_bool_vector(
     if (unlikely(rc < 0)) {
         return rc;
     }
+    /* RFC 4506: a boolean is an enumeration over exactly TRUE (1) and FALSE
+     * (0).  Anything else is not a value of the type, so reject it here
+     * rather than handing the caller a "boolean" it cannot switch on. */
+    if (unlikely(*v > 1)) {
+        return -1;
+    }
+
     return rc;
 } /* __unmarshall_xdr_bool_vector */
 
@@ -407,6 +414,13 @@ __unmarshall_xdr_bool_contig(
 
     if (unlikely(rc < 0)) {
         return rc;
+    }
+
+    /* RFC 4506: a boolean is an enumeration over exactly TRUE (1) and FALSE
+     * (0).  Anything else is not a value of the type, so reject it here
+     * rather than handing the caller a "boolean" it cannot switch on. */
+    if (unlikely(*v > 1)) {
+        return -1;
     }
 
     return rc;
