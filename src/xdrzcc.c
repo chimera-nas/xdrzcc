@@ -187,6 +187,12 @@ emit_marshall(
     }
 } /* emit_marshall */
 
+static void
+emit_enum_domain_check(
+    FILE            *output,
+    const char      *name,
+    struct xdr_type *type);
+
 void
 emit_unmarshall(
     FILE            *output,
@@ -324,6 +330,8 @@ emit_unmarshall(
 
     fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
     fprintf(output, "    len += rc;\n");
+
+    emit_enum_domain_check(output, name, type);
 } /* emit_unmarshall */
 
 void
@@ -467,6 +475,8 @@ emit_unmarshall_contig(
     }
 
     fprintf(output, "    len += rc;\n");
+
+    emit_enum_domain_check(output, name, type);
 } /* emit_unmarshall_contig */
 
 static int
@@ -1717,10 +1727,58 @@ emit_member(
          * treat this as a builtin uint32 for
          * the purpose of marshall/unmarshall
          */
-        type->name    = "uint32_t";
-        type->builtin = 1;
+        type->enum_name = type->name;
+        type->name      = "uint32_t";
+        type->builtin   = 1;
     }
 } /* emit_member */
+
+/*
+ * Emit a decode-time domain check for an enumeration member.
+ *
+ * RFC 4506 defines an enum as carrying exactly one of its declared values;
+ * a wire value outside that set is not a value of the type.  The generated
+ * decoder reads it as a plain uint32, so without this check an undeclared
+ * value is stored and handed to application code that will switch on it and
+ * fall through every case.
+ */
+static void
+emit_enum_domain_check(
+    FILE            *output,
+    const char      *name,
+    struct xdr_type *type)
+{
+    struct xdr_identifier *chk;
+    struct xdr_enum       *xdr_enump;
+    struct xdr_enum_entry *entryp;
+
+    if (!type->enumeration || !type->enum_name || type->vector || type->array) {
+        return;
+    }
+
+    HASH_FIND_STR(xdr_identifiers, type->enum_name, chk);
+
+    if (!chk || chk->type != XDR_ENUM) {
+        return;
+    }
+
+    xdr_enump = (struct xdr_enum *) chk->ptr;
+
+    fprintf(output, "    switch (out->%s) {\n", name);
+
+    DL_FOREACH(xdr_enump->entries, entryp)
+    {
+        fprintf(output, "    case %s:\n", entryp->name);
+    }
+
+    fprintf(output, "        break;\n");
+    fprintf(output, "    default:\n");
+    fprintf(output,
+            "        /* RFC 4506: %s carries no such value. */\n",
+            type->enum_name);
+    fprintf(output, "        return -1;\n");
+    fprintf(output, "    }\n");
+} /* emit_enum_domain_check */
 
 void
 emit_wrappers(
