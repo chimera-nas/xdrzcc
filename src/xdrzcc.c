@@ -839,6 +839,32 @@ emit_length_struct(
     fprintf(source, "}\n\n");
 } /* emit_length_struct */
 
+/*
+ * Does this union declare a "default" arm?
+ *
+ * XDR (RFC 4506) allows a union to omit one.  The generated switch must still
+ * cover every value the discriminant's type can hold: without a default arm
+ * the compiler reports the switch as non-exhaustive (-Wswitch), and, more
+ * importantly, a discriminant matching no arm would otherwise be accepted
+ * silently, leaving the union's body untouched and uninitialised.  Callers
+ * use this to decide whether to synthesise a default arm -- inert for the
+ * encode paths, a hard decode failure for the decode paths.
+ */
+static int
+union_has_default(struct xdr_union *xdr_unionp)
+{
+    struct xdr_union_case *casep;
+
+    DL_FOREACH(xdr_unionp->cases, casep)
+    {
+        if (strcmp(casep->label, "default") == 0) {
+            return 1;
+        }
+    }
+
+    return 0;
+} /* union_has_default */
+
 void
 emit_dump_union(
     FILE             *source,
@@ -875,6 +901,11 @@ emit_dump_union(
             fprintf(source, "    default:\n");
             fprintf(source, "        break;\n");
         }
+    }
+
+    if (!union_has_default(xdr_unionp)) {
+        fprintf(source, "    default:\n");
+        fprintf(source, "        break;\n");
     }
 
     fprintf(source, "    }\n");
@@ -955,6 +986,11 @@ emit_length_union(
             }
             fprintf(source, "        break;\n");
         }
+    }
+
+    if (!union_has_default(xdr_unionp)) {
+        fprintf(source, "    default:\n");
+        fprintf(source, "        break;\n");
     }
 
     fprintf(source, "    }\n");
@@ -2441,6 +2477,11 @@ main(
             }
         }
 
+        if (!union_has_default(xdr_unionp)) {
+            fprintf(source, "    default:\n");
+            fprintf(source, "        break;\n");
+        }
+
         fprintf(source, "    }\n");
         fprintf(source, "    return 0;\n");
         fprintf(source, "}\n\n");
@@ -2532,6 +2573,21 @@ main(
                     fprintf(source, "        break;\n");
                 }
             }
+        }
+
+        if (!union_has_default(xdr_unionp)) {
+            /* A union that declares no default still needs one emitted so
+             * the switch is exhaustive for the compiler.  It deliberately
+             * does nothing rather than failing the decode: an unrecognised
+             * discriminant is the application's to answer, and protocols
+             * require that.  NFSv4 must report an unknown operation as
+             * OP_ILLEGAL rather than rejecting the whole COMPOUND, and
+             * nfs_argop4 is exactly such a union.  Genuinely malformed
+             * input is still caught downstream: the arm consumes nothing,
+             * so the dispatcher's whole-message length check rejects it
+             * as GARBAGE_ARGS. */
+            fprintf(source, "    default:\n");
+            fprintf(source, "        break;\n");
         }
 
         fprintf(source, "    }\n");
@@ -2632,6 +2688,21 @@ main(
                     fprintf(source, "        break;\n");
                 }
             }
+        }
+
+        if (!union_has_default(xdr_unionp)) {
+            /* A union that declares no default still needs one emitted so
+             * the switch is exhaustive for the compiler.  It deliberately
+             * does nothing rather than failing the decode: an unrecognised
+             * discriminant is the application's to answer, and protocols
+             * require that.  NFSv4 must report an unknown operation as
+             * OP_ILLEGAL rather than rejecting the whole COMPOUND, and
+             * nfs_argop4 is exactly such a union.  Genuinely malformed
+             * input is still caught downstream: the arm consumes nothing,
+             * so the dispatcher's whole-message length check rejects it
+             * as GARBAGE_ARGS. */
+            fprintf(source, "    default:\n");
+            fprintf(source, "        break;\n");
         }
 
         fprintf(source, "    }\n");
