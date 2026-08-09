@@ -1084,6 +1084,7 @@ __unmarshall_opaque_contig(
     if (unlikely(rc < 0)) {
         return rc;
     }
+
     /* RFC 4506: an opaque declared with a bound may not carry more than that.
      * The length is unauthenticated input, so refuse an over-bound value here
      * instead of aliasing or copying it.  A bound of 0 means unbounded. */

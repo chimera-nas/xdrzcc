@@ -1190,6 +1190,7 @@ emit_program(
 {
     struct xdr_function *functionp;
     int                  maxproc = 0;
+    int                  has_null_proc;
     char                 call_type_buf[256];
     char                 reply_type_buf[256];
 
@@ -1293,6 +1294,36 @@ emit_program(
             version->name);
     fprintf(source, "    int len;\n");
     fprintf(source, "    switch (proc) {\n");
+
+    /* RFC 5531 section 11.1 requires every program to implement procedure 0
+     * as NULL: no arguments, no results.  Emit it automatically unless the
+     * .x declares proc 0 itself, so that a program cannot accidentally answer
+     * PROC_UNAVAIL to the one call every client is entitled to make (it is
+     * the standard liveness probe, e.g. rpcinfo -T tcp <host> <prog>). */
+    has_null_proc = 0;
+    for (functionp = version->functions; functionp != NULL; functionp =
+             functionp->next) {
+        if (functionp->id == 0) {
+            has_null_proc = 1;
+            break;
+        }
+    }
+
+    if (!has_null_proc) {
+        fprintf(source, "    case 0:\n");
+        fprintf(source, "        /* NULL procedure (RFC 5531 11.1), generated. */\n");
+        fprintf(source, "        if (unlikely(length != 0)) return 2;\n");
+        fprintf(source, "        {\n");
+        fprintf(source, "            uint32_t null_reserve = encoding->program->reserve;\n");
+        fprintf(source, "            xdr_iovec null_iov;\n");
+        fprintf(source, "            int null_niov;\n");
+        fprintf(source,
+                "            null_niov = evpl_iovec_alloc(evpl, null_reserve, 8, 1, 0, &null_iov);\n");
+        fprintf(source,
+                "            evpl_rpc2_send_reply_dispatch(evpl, encoding, NULL, &null_iov, null_niov, null_reserve);\n");
+        fprintf(source, "        }\n");
+        fprintf(source, "        break;\n\n");
+    }
 
     for (functionp = version->functions; functionp != NULL; functionp =
              functionp->next) {
