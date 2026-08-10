@@ -1801,6 +1801,22 @@ emit_member(
 } /* emit_member */
 
 /*
+ * Whether a decoded enum value must be one the declaration names.
+ *
+ * On by default: RFC 4506 says an enumeration carries exactly the values its
+ * declaration lists, so anything else is not a value of the type.
+ *
+ * Turned off with -e for a protocol whose deployed wire format has outgrown
+ * the .x in hand.  NFSv4 is the motivating case: layouttype4 gained
+ * LAYOUT4_FLEX_FILES in RFC 8435, years after the base XDR was written, so an
+ * implementation carrying the older definition rejects every flex-files
+ * layout rather than passing the value to code that understands it.  That is
+ * a worse failure than the one the check prevents, and it recurs each time a
+ * protocol accretes a value.
+ */
+static int strict_enums = 1;
+
+/*
  * Emit a decode-time domain check for an enumeration member.
  *
  * RFC 4506 defines an enum as carrying exactly one of its declared values;
@@ -1818,6 +1834,10 @@ emit_enum_domain_check(
     struct xdr_identifier *chk;
     struct xdr_enum       *xdr_enump;
     struct xdr_enum_entry *entryp;
+
+    if (!strict_enums) {
+        return;
+    }
 
     if (!type->enumeration || !type->enum_name || type->vector || type->array) {
         return;
@@ -1910,6 +1930,9 @@ print_usage(const char *prog_name)
     fprintf(stderr, "Usage: %s <input.x> <output.c> <output.h>\n", prog_name);
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "  -h            Display this help message and exit\n");
+    fprintf(stderr, "  -r            Emit RPC2 client and server dispatch code\n");
+    fprintf(stderr,
+            "  -e            Accept enum values the declaration does not name\n");
 } /* print_usage */
 
 int
@@ -1936,13 +1959,16 @@ main(
     const char               *output_h;
     int                       opt;
 
-    while ((opt = getopt(argc, argv, "hr")) != -1) {
+    while ((opt = getopt(argc, argv, "hre")) != -1) {
         switch (opt) {
             case 'h':
                 print_usage(argv[0]);
                 return 0;
             case 'r':
                 emit_rpc2 = 1;
+                break;
+            case 'e':
+                strict_enums = 0;
                 break;
             default:
                 print_usage(argv[0]);
