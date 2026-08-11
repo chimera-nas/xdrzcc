@@ -4,6 +4,20 @@
 
 add_definitions(-UNDEBUG -Wno-switch)
 
+# Warnings waived on the generated sources, which are held to the same -Werror
+# as everything else: a given .x leaves some emitted helpers unused, and the
+# dumpers snprintf() into fixed buffers where truncation is the intent.
+#
+# -Wno-format-truncation is a GCC spelling with no clang equivalent.  clang
+# does not reject an unknown -Wno-* outright -- it holds the complaint back and
+# raises it only if some other diagnostic fires -- so passing it there is a
+# latent failure rather than a harmless no-op, and it does fire on macOS.
+set(XDR_WARNING_FLAGS "-Wno-unused")
+
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+    list(APPEND XDR_WARNING_FLAGS "-Wno-format-truncation")
+endif()
+
 macro(unit_test_xdrzcc name xdr_file c_file)
 
     set(XDR_C ${CMAKE_CURRENT_BINARY_DIR}/${name}_xdr.c)
@@ -21,7 +35,7 @@ macro(unit_test_xdrzcc name xdr_file c_file)
     add_executable(${name} ${c_file} ${XDR_C})
 
     set_source_files_properties(
-        ${XDR_C} PROPERTIES COMPILE_OPTIONS "-Wno-unused;-Wno-format-truncation"
+        ${XDR_C} PROPERTIES COMPILE_OPTIONS "${XDR_WARNING_FLAGS}"
     )
 
     add_dependencies(${name} xdrzcc)
