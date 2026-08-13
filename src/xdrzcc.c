@@ -1508,15 +1508,19 @@ emit_program(
             }
             fprintf(source, "        }\n");
         } else {
+            /* The case body must be a braced block: a declaration directly
+             * after a case label is a C23 feature that older compilers
+             * (notably Apple clang) reject. */
+            fprintf(source, "        {\n");
             fprintf(source,
-                    " void (*callback_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, int status, void *callback_private_data) = callback_fn;\n",
+                    "        void (*callback_%s)(struct evpl *evpl, const struct evpl_rpc2_verf *verf, int status, void *callback_private_data) = callback_fn;\n",
                     functionp->name);
             /* No argument, just make the call.  A void reply has no body to
              * decode, so success and failure differ only in the status. */
             fprintf(source,
                     "        callback_%s(evpl, verf, status, callback_private_data);\n",
                     functionp->name);
-
+            fprintf(source, "        }\n");
         }
         fprintf(source, "        break;\n\n");
     }
