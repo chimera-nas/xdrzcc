@@ -171,7 +171,7 @@ __xdr_dbuf_alloc_array(
 {
     *nump = num;
 
-    *datap = xdr_dbuf_alloc_space(num * element_size, dbuf);
+    *datap = xdr_dbuf_alloc_space((size_t) num * (size_t) element_size, dbuf);
 
     if (unlikely(*datap == NULL)) {
         return -1;
