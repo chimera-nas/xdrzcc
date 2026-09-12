@@ -14,15 +14,27 @@
 typedef uint32_t xdr_bool;
 
 #ifndef WARN_UNUSED_RESULT
+#ifdef _MSC_VER
+#define WARN_UNUSED_RESULT
+#else // ifdef _MSC_VER
 #define WARN_UNUSED_RESULT __attribute__((warn_unused_result))
+#endif // ifdef _MSC_VER
 #endif /* ifndef WARN_UNUSED_RESULT */
 
 #ifndef FORCE_INLINE
+#ifdef _MSC_VER
+#define FORCE_INLINE       __forceinline
+#else // ifdef _MSC_VER
 #define FORCE_INLINE       __attribute__((always_inline)) inline
+#endif // ifdef _MSC_VER
 #endif /* ifndef FORCE_INLINE */
 
 #ifndef unlikely
+#ifdef _MSC_VER
+#define unlikely(x) (!!(x))
+#else // ifdef _MSC_VER
 #define unlikely(x) __builtin_expect(!!(x), 0)
+#endif // ifdef _MSC_VER
 #endif /* ifndef unlikely */
 
 struct evpl_rpc2_rdma_chunk;

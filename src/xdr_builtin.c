@@ -13,27 +13,25 @@
 #endif /* ifndef XDRZCC_XDR_BUILTIN_H */
 
 #ifndef TRUE
-#define TRUE         1
+#define TRUE  1
 #endif /* ifndef TRUE */
 
 #ifndef FALSE
-#define FALSE        0
+#define FALSE 0
 #endif /* ifndef FALSE */
 
-#define unlikely(x) __builtin_expect(!!(x), 0)
-#define FORCE_INLINE __attribute__((always_inline)) inline
 
 static FORCE_INLINE int WARN_UNUSED_RESULT
 xdr_iovec_add_offset(
     xdr_iovec *iov,
     int        offset)
 {
-    if (unlikely(xdr_iovec_len(iov) <= offset)) {
+    if (unlikely(offset < 0 || xdr_iovec_len(iov) <= (unsigned int) offset)) {
         return -1;
     }
 
     xdr_iovec_set_len(iov, xdr_iovec_len(iov) - offset);
-    xdr_iovec_set_data(iov, xdr_iovec_data(iov) + offset);
+    xdr_iovec_set_data(iov, (char *) xdr_iovec_data(iov) + offset);
 
     return 0;
 } /* xdr_iovec_add_offset */
@@ -41,41 +39,49 @@ xdr_iovec_add_offset(
 static FORCE_INLINE uint32_t
 xdr_hton32(uint32_t value)
 {
-#if __BYTE_ORDER == __LITTLE_ENDIAN
+#if defined(_WIN32)
+    return _byteswap_ulong(value);
+#elif defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     return __builtin_bswap32(value);
-#else  /* if __BYTE_ORDER == __LITTLE_ENDIAN */
+#else  /* if defined(_WIN32) */
     return value;
-#endif /* if __BYTE_ORDER == __LITTLE_ENDIAN */
+#endif /* if defined(_WIN32) */
 } /* xdr_hton32 */
 
 static FORCE_INLINE uint32_t
 xdr_ntoh32(uint32_t value)
 {
-#if __BYTE_ORDER == __LITTLE_ENDIAN
+#if defined(_WIN32)
+    return _byteswap_ulong(value);
+#elif defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     return __builtin_bswap32(value);
-#else  /* if __BYTE_ORDER == __LITTLE_ENDIAN */
+#else  /* if defined(_WIN32) */
     return value;
-#endif /* if __BYTE_ORDER == __LITTLE_ENDIAN */
+#endif /* if defined(_WIN32) */
 } /* xdr_ntoh32 */
 
 static FORCE_INLINE uint64_t
 xdr_hton64(uint64_t value)
 {
-#if __BYTE_ORDER == __LITTLE_ENDIAN
+#if defined(_WIN32)
+    return _byteswap_uint64(value);
+#elif defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     return __builtin_bswap64(value);
-#else  /* if __BYTE_ORDER == __LITTLE_ENDIAN */
+#else  /* if defined(_WIN32) */
     return value;
-#endif /* if __BYTE_ORDER == __LITTLE_ENDIAN */
+#endif /* if defined(_WIN32) */
 } /* xdr_hton64 */
 
 static FORCE_INLINE uint64_t
 xdr_ntoh64(uint64_t value)
 {
-#if __BYTE_ORDER == __LITTLE_ENDIAN
+#if defined(_WIN32)
+    return _byteswap_uint64(value);
+#elif defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     return __builtin_bswap64(value);
-#else  /* if __BYTE_ORDER == __LITTLE_ENDIAN */
+#else  /* if defined(_WIN32) */
     return value;
-#endif /* if __BYTE_ORDER == __LITTLE_ENDIAN */
+#endif /* if defined(_WIN32) */
 } /* xdr_ntoh64 */
 
 static FORCE_INLINE uint32_t
@@ -97,7 +103,7 @@ struct xdr_write_cursor {
     int                          niov;
     int                          maxiov;
     xdr_iovec                   *scratch_iov;
-    void                        *scratch_data;
+    char                        *scratch_data;
     int                          scratch_size;
     int                          scratch_used;
     int                          scratch_reserved;
@@ -193,7 +199,7 @@ xdr_read_cursor_vector_extract(
         }
 
         memcpy(out,
-               xdr_iovec_data(cursor->cur) + cursor->iov_offset,
+               (char *) xdr_iovec_data(cursor->cur) + cursor->iov_offset,
                chunk);
 
         left               -= chunk;
@@ -216,7 +222,8 @@ xdr_write_cursor_append(
     const void              *in,
     unsigned int             bytes)
 {
-    if (unlikely(cursor->scratch_used + bytes > cursor->scratch_size)) {
+    if (unlikely(cursor->scratch_used > cursor->scratch_size ||
+                 bytes > (unsigned int) (cursor->scratch_size - cursor->scratch_used))) {
         return -1;
     }
 
@@ -276,7 +283,7 @@ xdr_read_cursor_contig_init(
 } /* xdr_read_cursor_contig_init */
 
 static FORCE_INLINE uint32_t
-__marshall_length_uint32_t(const uint32_t *v)
+__marshall_length_uint32_t(const void *v)
 {
     return 4;
 } /* __marshall_length_uint32_t */
@@ -319,14 +326,19 @@ __marshall_length_double(const double *v)
 
 static FORCE_INLINE int WARN_UNUSED_RESULT
 __marshall_uint32_t(
-    const uint32_t          *v,
+    const void              *v,
     struct xdr_write_cursor *cursor)
 {
     if (unlikely(cursor->scratch_used + 4 > cursor->scratch_size)) {
         return -1;
     }
 
-    *(uint32_t *) (cursor->scratch_data + cursor->scratch_used) = xdr_hton32(*v);
+    /* The generator uses this primitive for both uint32_t and 32-bit enums.
+     * Copy their representation: MSVC enums have a distinct, signed C type. */
+    uint32_t value;
+    memcpy(&value, v, sizeof(value));
+    value = xdr_hton32(value);
+    memcpy(cursor->scratch_data + cursor->scratch_used, &value, sizeof(value));
 
     cursor->scratch_used += 4;
 
@@ -335,7 +347,7 @@ __marshall_uint32_t(
 
 static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_uint32_t_vector(
-    uint32_t               *v,
+    void                   *v,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
@@ -348,14 +360,15 @@ __unmarshall_uint32_t_vector(
         return rc;
     }
 
-    *v = xdr_ntoh32(tmp);
+    tmp = xdr_ntoh32(tmp);
+    memcpy(v, &tmp, sizeof(tmp));
 
     return 4;
 } /* __unmarshall_uint32_t_vector */
 
 static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_uint32_t_contig(
-    uint32_t               *v,
+    void                   *v,
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
@@ -363,7 +376,10 @@ __unmarshall_uint32_t_contig(
         return -1;
     }
 
-    *v                  = xdr_ntoh32(*(const uint32_t *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset));
+    uint32_t value;
+    memcpy(&value, (char *) xdr_iovec_data(cursor->cur) + cursor->iov_offset, sizeof(value));
+    value = xdr_ntoh32(value);
+    memcpy(v, &value, sizeof(value));
     cursor->iov_offset += 4;
     cursor->offset     += 4;
     return 4;
@@ -456,7 +472,8 @@ __unmarshall_int32_t_vector(
         return rc;
     }
 
-    *v = xdr_ntoh32(tmp);
+    tmp = xdr_ntoh32(tmp);
+    memcpy(v, &tmp, sizeof(tmp));
 
     return 4;
 } /* __unmarshall_int32_t_vector */
@@ -471,7 +488,7 @@ __unmarshall_int32_t_contig(
         return -1;
     }
 
-    *v                  = xdr_ntoh32(*(const int32_t *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset));
+    *v                  = xdr_ntoh32(*(const int32_t *) ((char *) xdr_iovec_data(cursor->cur) + cursor->iov_offset));
     cursor->iov_offset += 4;
     cursor->offset     += 4;
     return 4;
@@ -522,7 +539,7 @@ __unmarshall_uint64_t_contig(
         return -1;
     }
 
-    *v                  = xdr_ntoh64(*(const uint64_t *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset));
+    *v                  = xdr_ntoh64(*(const uint64_t *) ((char *) xdr_iovec_data(cursor->cur) + cursor->iov_offset));
     cursor->iov_offset += 8;
     cursor->offset     += 8;
     return 8;
@@ -573,7 +590,7 @@ __unmarshall_int64_t_contig(
         return -1;
     }
 
-    *v                  = xdr_ntoh64(*(const int64_t *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset));
+    *v                  = xdr_ntoh64(*(const int64_t *) ((char *) xdr_iovec_data(cursor->cur) + cursor->iov_offset));
     cursor->iov_offset += 8;
     cursor->offset     += 8;
     return 8;
@@ -606,7 +623,7 @@ __unmarshall_float_contig(
         return -1;
     }
 
-    *v                  = *(const float *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset);
+    *v                  = *(const float *) ((char *) xdr_iovec_data(cursor->cur) + cursor->iov_offset);
     cursor->iov_offset += 4;
     cursor->offset     += 4;
     return 4;
@@ -639,7 +656,7 @@ __unmarshall_double_contig(
         return -1;
     }
 
-    *v                  = *(const double *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset);
+    *v                  = *(const double *) ((char *) xdr_iovec_data(cursor->cur) + cursor->iov_offset);
     cursor->iov_offset += 8;
     cursor->offset     += 8;
     return 8;
@@ -702,7 +719,7 @@ __unmarshall_xdr_string_vector(
     }
 
     if (xdr_iovec_len(cursor->cur) - cursor->iov_offset >= str->len) {
-        str->str            = xdr_iovec_data(cursor->cur) + cursor->iov_offset;
+        str->str            = (char *) xdr_iovec_data(cursor->cur) + cursor->iov_offset;
         cursor->iov_offset += str->len;
         cursor->offset     += str->len;
 
@@ -775,7 +792,7 @@ __unmarshall_xdr_string_contig(
         return -1;
     }
 
-    str->str            = (char *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset);
+    str->str            = (char *) xdr_iovec_data(cursor->cur) + cursor->iov_offset;
     cursor->iov_offset += str->len;
     cursor->offset     += str->len;
     len                += str->len;
@@ -828,7 +845,7 @@ __unmarshall_opaque_fixed_vector(
         }
 
         xdr_iovec_copy_private(&v->iov[v->niov], cursor->cur);
-        xdr_iovec_set_data(&v->iov[v->niov], xdr_iovec_data(cursor->cur) +
+        xdr_iovec_set_data(&v->iov[v->niov], (char *) xdr_iovec_data(cursor->cur) +
                            cursor->iov_offset);
 
         chunk = xdr_iovec_len(cursor->cur) - cursor->iov_offset;
@@ -899,7 +916,7 @@ __unmarshall_opaque_fixed_contig(
     }
 
     xdr_iovec_copy_private(&v->iov[0], cursor->cur);
-    xdr_iovec_set_data(&v->iov[0], (void *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset));
+    xdr_iovec_set_data(&v->iov[0], (void *) ((char *) xdr_iovec_data(cursor->cur) + cursor->iov_offset));
     xdr_iovec_set_len(&v->iov[0], size);
 
     cursor->iov_offset += size;
@@ -951,7 +968,8 @@ __marshall_opaque_zerocopy(
 {
     const uint32_t zero = 0;
     xdr_iovec     *iov;
-    int            i, pad, left = v->length;
+    int            i, pad;
+    uint32_t       left = v->length;
     int            rc;
 
     rc = __marshall_uint32_t(&v->length, cursor);
@@ -1037,7 +1055,7 @@ __unmarshall_opaque_vector(
     }
 
     if (xdr_iovec_len(cursor->cur) - cursor->iov_offset >= v->len) {
-        v->data             = xdr_iovec_data(cursor->cur) + cursor->iov_offset;
+        v->data             = (char *) xdr_iovec_data(cursor->cur) + cursor->iov_offset;
         cursor->iov_offset += v->len;
         cursor->offset     += v->len;
         if (cursor->iov_offset == xdr_iovec_len(cursor->cur)) {
@@ -1104,7 +1122,7 @@ __unmarshall_opaque_contig(
         return -1;
     }
 
-    v->data             = (void *) (xdr_iovec_data(cursor->cur) + cursor->iov_offset);
+    v->data             = (void *) ((char *) xdr_iovec_data(cursor->cur) + cursor->iov_offset);
     cursor->iov_offset += v->len;
     cursor->offset     += v->len;
     len                += v->len;
@@ -1124,9 +1142,8 @@ __unmarshall_opaque_zerocopy_vector(
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
-    int                          rc;
-    uint32_t                     size;
-    struct evpl_rpc2_rdma_chunk *chunk;
+    int      rc;
+    uint32_t size;
 
     rc = __unmarshall_uint32_t_vector(&size, cursor, dbuf);
 
@@ -1136,7 +1153,7 @@ __unmarshall_opaque_zerocopy_vector(
 
 #if EVPL_RPC2
     if (cursor->read_chunk && cursor->read_chunk->length) {
-        chunk = cursor->read_chunk;
+        struct evpl_rpc2_rdma_chunk *chunk = cursor->read_chunk;
         if (chunk->xdr_position == cursor->offset ||
             chunk->xdr_position == UINT32_MAX) {
             v->iov    = chunk->iov;
@@ -1221,7 +1238,7 @@ dump_opaque(
     const void *v,
     uint32_t    length)
 {
-    int i;
+    uint32_t i;
 
     if (is_ascii(v, length)) {
         snprintf(out, outlen, "'%.*s' [%u bytes]", length, (const char *) v,

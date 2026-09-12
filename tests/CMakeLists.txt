@@ -2,7 +2,11 @@
 #
 # SPDX-License-Identifier: LGPL-2.1-only
 
-add_definitions(-UNDEBUG -Wno-switch)
+if(MSVC)
+    add_compile_options(/UNDEBUG)
+else()
+    add_compile_options(-UNDEBUG -Wno-switch)
+endif()
 
 # Warnings waived on the generated sources, which are held to the same -Werror
 # as everything else: a given .x leaves some emitted helpers unused, and the
@@ -12,7 +16,10 @@ add_definitions(-UNDEBUG -Wno-switch)
 # does not reject an unknown -Wno-* outright -- it holds the complaint back and
 # raises it only if some other diagnostic fires -- so passing it there is a
 # latent failure rather than a harmless no-op, and it does fire on macOS.
-set(XDR_WARNING_FLAGS "-Wno-unused")
+set(XDR_WARNING_FLAGS)
+if(NOT MSVC)
+    list(APPEND XDR_WARNING_FLAGS "-Wno-unused")
+endif()
 
 if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
     list(APPEND XDR_WARNING_FLAGS "-Wno-format-truncation")
@@ -27,8 +34,9 @@ macro(unit_test_xdrzcc name xdr_file c_file)
     add_custom_command(
         OUTPUT ${XDR_C} ${XDR_H}
         COMMAND ${XDRZCC} ${XDR_X} ${XDR_C} ${XDR_H}
-        DEPENDS ${XDR_X} ${XDRZCC}
+        DEPENDS ${XDR_X} xdrzcc
         COMMENT "Compiling ${xdr_file}"
+        VERBATIM
     )
 
     include_directories(${CMAKE_CURRENT_BINARY_DIR})
@@ -60,10 +68,10 @@ set_tests_properties(xdrzcc/xdrzcc_two_args PROPERTIES WILL_FAIL TRUE)
 add_test(NAME xdrzcc/xdrzcc_missing_source COMMAND ${XDRZCC} no such thing)
 set_tests_properties(xdrzcc/xdrzcc_missing_source PROPERTIES WILL_FAIL TRUE)
 
-add_test(NAME xdrzcc/xdrzcc_bad_output_source COMMAND ${XDRZCC} uint32.x nosuchdir/out.c nosuchdir/out.h)
+add_test(NAME xdrzcc/xdrzcc_bad_output_source COMMAND ${XDRZCC} ${CMAKE_CURRENT_SOURCE_DIR}/uint32.x nosuchdir/out.c nosuchdir/out.h)
 set_tests_properties(xdrzcc/xdrzcc_bad_output_source PROPERTIES WILL_FAIL TRUE)
 
-add_test(NAME xdrzcc/xdrzcc_bad_output_header COMMAND ${XDRZCC} uint32.x out.c nosuchdir/out.h)
+add_test(NAME xdrzcc/xdrzcc_bad_output_header COMMAND ${XDRZCC} ${CMAKE_CURRENT_SOURCE_DIR}/uint32.x out.c nosuchdir/out.h)
 set_tests_properties(xdrzcc/xdrzcc_bad_output_header PROPERTIES WILL_FAIL TRUE)
 
 unit_test_xdrzcc(uint32 uint32.x uint32.c)
@@ -79,3 +87,10 @@ unit_test_xdrzcc(optional optional.x optional.c)
 unit_test_xdrzcc(string string.x string.c)
 unit_test_xdrzcc(opaque opaque.x opaque.c)
 unit_test_xdrzcc(rfc7863 rfc7863.x rfc7863.c)
+
+unit_test_xdrzcc(wire_integers wire_integers.x wire_integers.c)
+
+add_test(NAME xdrzcc/cli COMMAND ${CMAKE_COMMAND}
+    -DXDRZCC=$<TARGET_FILE:xdrzcc>
+    -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR} -DWORK=${CMAKE_CURRENT_BINARY_DIR}
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/cli.cmake)

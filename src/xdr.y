@@ -25,7 +25,7 @@ extern struct xdr_enum *xdr_enums;
 extern struct xdr_const *xdr_consts;
 extern struct xdr_program *xdr_programs;
 
-void * xdr_alloc(unsigned int size);
+void * xdr_alloc(size_t size);
 
 void xdr_add_identifier(int type, const char *name, void *ptr);
 

@@ -22,7 +22,7 @@ main(
 
     dbuf = xdr_dbuf_alloc(16 * 1024);
 
-    msg1.value = 42.7;
+    msg1.value = 42.7f;
 
     rc = marshall_MyMsg(&msg1, &iov_in, &iov_out, &one, NULL, 0);
 
