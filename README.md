@@ -22,6 +22,35 @@ The primary motivation for creating xdrzcc is to use these capabilities to parse
 
 xdrzcc is mostly complete but is still currently in an experimental state.    Expect to find some bugs if you intend to use it.  The API is not necessarily fully stable yet.
 
+## Building
+
+The compiler and generated serialization code build with GCC, Clang, and native
+MSVC (C11). CMake 3.18 or later, Flex, Bison, and the `uthash.h` and `utlist.h`
+headers are build dependencies. Generated serialization code only needs the C
+runtime; RPC stubs generated with `-r` additionally require libevpl.
+
+On Windows, install Visual Studio 2022 or its Build Tools with the C++ workload
+and Windows SDK. Use native [WinFlexBison](https://github.com/lexxmark/winflexbison)
+and [uthash](https://github.com/troydhanson/uthash) headers. From PowerShell,
+substituting your dependency paths:
+
+```powershell
+cmake -S . -B build -G "Visual Studio 17 2022" -A ARM64 `
+  -DFLEX_EXECUTABLE=C:/tools/winflexbison/win_flex.exe `
+  -DBISON_EXECUTABLE=C:/tools/winflexbison/win_bison.exe `
+  -DUTHASH_INCLUDE_DIR=C:/tools/uthash/src `
+  -DUTLIST_INCLUDE_DIR=C:/tools/uthash/src
+cmake --build build --config Debug --parallel 4
+ctest --test-dir build -C Debug --output-on-failure
+cmake --install build --config Debug --prefix install
+```
+
+Use `-A x64` for Intel/AMD Windows. ARM64 is appropriate for a Windows VM on
+Apple silicon. The compiler is installed as `install/bin/xdrzcc.exe`; no POSIX
+compatibility runtime is required. Repeat with `--config Release` and `-C Release`
+to test the optimized build. GitHub Actions builds and tests both configurations
+on Windows x64/ARM64, macOS ARM64, and Linux x64/ARM64.
+
 ## Usage
 
 To use xdrzcc, provide an XDR .x file and it will produce a C source file and header file:

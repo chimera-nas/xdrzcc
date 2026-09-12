@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
-#include <getopt.h>
+#include "getopt_compat.h"
 #include "y.tab.h"
 
 #include "xdr.h"
@@ -14,8 +14,8 @@ extern FILE        *yyin;
 
 extern int yyparse();
 
-extern const char  *embedded_builtin_c;
-extern const char  *embedded_builtin_h;
+extern const char   embedded_builtin_c[];
+extern const char   embedded_builtin_h[];
 
 struct xdr_struct  *xdr_structs  = NULL;
 struct xdr_union   *xdr_unions   = NULL;
@@ -26,8 +26,8 @@ struct xdr_program *xdr_programs = NULL;
 
 struct xdr_buffer {
     void              *data;
-    unsigned int       used;
-    unsigned int       size;
+    size_t             used;
+    size_t             size;
     struct xdr_buffer *prev;
     struct xdr_buffer *next;
 };
@@ -45,7 +45,7 @@ struct xdr_identifier {
 struct xdr_identifier *xdr_identifiers = NULL;
 
 void *
-xdr_alloc(unsigned int size)
+xdr_alloc(size_t size)
 {
     struct xdr_buffer *xdr_buffer = xdr_buffers;
     void              *ptr;
@@ -60,7 +60,7 @@ xdr_alloc(unsigned int size)
         DL_PREPEND(xdr_buffers, xdr_buffer);
     }
 
-    ptr = xdr_buffer->data + xdr_buffer->used;
+    ptr = (char *) xdr_buffer->data + xdr_buffer->used;
 
     xdr_buffer->used += size;
 
@@ -70,8 +70,8 @@ xdr_alloc(unsigned int size)
 char *
 xdr_strdup(const char *str)
 {
-    int   len = strlen(str) + 1;
-    char *out = xdr_alloc(len);
+    size_t len = strlen(str) + 1;
+    char  *out = xdr_alloc(len);
 
     memcpy(out, str, len);
 
@@ -171,7 +171,7 @@ emit_marshall(
         fprintf(output,
                 "    if (unlikely(__marshall_uint32_t(&in->num_%s, cursor) < 0)) return -1;\n",
                 name);
-        fprintf(output, "    for (int i = 0; i < in->num_%s; i++) {\n", name);
+        fprintf(output, "    for (uint32_t i = 0; i < in->num_%s; i++) {\n", name);
         fprintf(output, "        if (unlikely(__marshall_%s(&in->%s[i], cursor) < 0)) return -1;\n",
                 type->name, name);
         fprintf(output, "    }\n");
@@ -304,7 +304,7 @@ emit_unmarshall(
         fprintf(output, "     out->%s = xdr_dbuf_alloc_space(out->num_%s * sizeof(*out->%s), dbuf);\n",
                 name, name, name);
         fprintf(output, "     if (unlikely(out->%s == NULL)) return -1;\n", name);
-        fprintf(output, "    for (int i = 0; i < out->num_%s; i++) {\n", name);
+        fprintf(output, "    for (uint32_t i = 0; i < out->num_%s; i++) {\n", name);
         fprintf(output,
                 "    rc = __unmarshall_%s_vector(&out->%s[i], cursor, dbuf);\n",
                 type->name, name);
@@ -346,7 +346,7 @@ emit_unmarshall_contig(
     if (type->opaque) {
         if (type->array) {
             fprintf(output,
-                    "    memcpy(out->%s, xdr_iovec_data(cursor->cur) + cursor->iov_offset, %s);\n",
+                    "    memcpy(out->%s, (char *) xdr_iovec_data(cursor->cur) + cursor->iov_offset, %s);\n",
                     name, type->array_size);
             fprintf(output, "    cursor->iov_offset += %s;\n", type->array_size);
             fprintf(output, "    cursor->offset += %s;\n", type->array_size);
@@ -449,7 +449,7 @@ emit_unmarshall_contig(
         fprintf(output, "     out->%s = xdr_dbuf_alloc_space(out->num_%s * sizeof(*out->%s), dbuf);\n",
                 name, name, name);
         fprintf(output, "     if (unlikely(out->%s == NULL)) return -1;\n", name);
-        fprintf(output, "    for (int i = 0; i < out->num_%s; i++) {\n", name);
+        fprintf(output, "    for (uint32_t i = 0; i < out->num_%s; i++) {\n", name);
         fprintf(output,
                 "    rc = __unmarshall_%s_contig(&out->%s[i], cursor, dbuf);\n",
                 type->name, name);
@@ -632,7 +632,7 @@ emit_dump_member(
                 fprintf(source,
                         "    dump_output(\"%%s.num_%s = %%u\", subprefix, in->num_%s);\n",
                         name, name);
-                fprintf(source, "    for (int i = 0; i < in->num_%s; i++) {\n",
+                fprintf(source, "    for (uint32_t i = 0; i < in->num_%s; i++) {\n",
                         name);
                 fprintf(source,
                         "        char subsubprefix[160];\n");
@@ -650,7 +650,9 @@ emit_dump_member(
             }
         } else if (type->opaque) {
             fprintf(source, "    {\n");
-            fprintf(source, "        char opaquestr[80];\n");
+            if (!type->zerocopy) {
+                fprintf(source, "        char opaquestr[80];\n");
+            }
             if (type->zerocopy) {
                 fprintf(source,
                         "    dump_output(\"%%s.%s = <opaque> [%%u bytes]\", subprefix, in->%s.length);\n",
@@ -693,7 +695,7 @@ emit_dump_member(
             fprintf(source,
                     "    dump_output(\"%%s.num_%s = %%u\", subprefix, in->num_%s);\n",
                     name, name);
-            fprintf(source, "   for (int i = 0; i < in->num_%s; i++) {\n", name)
+            fprintf(source, "   for (uint32_t i = 0; i < in->num_%s; i++) {\n", name)
             ;
             fprintf(source, "       char subsubprefix[80];\n");
             fprintf(source,
@@ -744,7 +746,7 @@ emit_length_member(
         fprintf(source, "    length += 4 + in->%s.len + xdr_pad(in->%s.len);\n", name, name);
     } else if (emit_type->vector) {
         fprintf(source, "    length += 4;\n");
-        fprintf(source, "    for (int i = 0; i < in->num_%s; i++) {\n", name);
+        fprintf(source, "    for (uint32_t i = 0; i < in->num_%s; i++) {\n", name);
         fprintf(source, "        length += __marshall_length_%s(&in->%s[i]);\n", type->name, name);
         fprintf(source, "    }\n");
     } else if (emit_type->optional) {
@@ -1189,7 +1191,7 @@ emit_program(
     struct xdr_version *version)
 {
     struct xdr_function *functionp;
-    int                  maxproc = 0;
+    uint32_t             maxproc = 0;
     int                  has_null_proc;
     char                 call_type_buf[256];
     char                 reply_type_buf[256];
@@ -1705,7 +1707,7 @@ emit_program(
     fprintf(source, "    memset(prog, 0, sizeof(*prog));\n");
     fprintf(source, "    prog->rpc2.program = %s;\n", program->id);
     fprintf(source, "    prog->rpc2.version = %s;\n", version->id);
-    fprintf(source, "    prog->rpc2.maxproc = %d;\n", maxproc);
+    fprintf(source, "    prog->rpc2.maxproc = %u;\n", maxproc);
     fprintf(source, "    prog->rpc2.reserve = 256;\n");
     fprintf(source, "    prog->rpc2.procs = %s_%s_procs;\n", program->name,
             version->name);

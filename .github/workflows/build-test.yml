@@ -5,6 +5,8 @@
 name: Build and perform build time tests
 
 on:
+  push:
+    branches: [main]
   pull_request:        # always build for PRs but don't publish
   workflow_dispatch:   # allow manual runs
 
@@ -72,3 +74,68 @@ jobs:
               cmake -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} /workspace && \
               ninja && \
               ctest -j 4 --output-on-failure'
+
+  native:
+    name: Build ${{ matrix.platform.os }} ${{ matrix.platform.arch }} ${{ matrix.build_type }}
+    runs-on: ${{ matrix.platform.runner }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+        platform:
+          - {os: windows, runner: windows-2022, arch: x64}
+          - {os: windows, runner: windows-11-arm, arch: ARM64}
+          - {os: macos, runner: macos-14, arch: ARM64}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Windows build dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tools = "$env:RUNNER_TEMP/winflexbison"
+          $archive = "$env:RUNNER_TEMP/winflexbison.zip"
+          Invoke-WebRequest https://github.com/lexxmark/winflexbison/releases/download/v2.5.25/win_flex_bison-2.5.25.zip -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash -ne '8d324b62be33604b2c45ad1dd34ab93d722534448f55a16ca7292de32b6ac135') {
+            throw 'WinFlexBison checksum mismatch'
+          }
+          Expand-Archive $archive $tools
+          $headers = "$env:RUNNER_TEMP/uthash"
+          New-Item -ItemType Directory -Force $headers | Out-Null
+          foreach ($header in @('uthash.h', 'utlist.h')) {
+            Invoke-WebRequest "https://raw.githubusercontent.com/troydhanson/uthash/e493aa90a2833b4655927598f169c31cfcdf7861/src/$header" -OutFile "$headers/$header"
+          }
+          cmake -S . -B build -G 'Visual Studio 17 2022' -A ${{ matrix.platform.arch }} "-DFLEX_EXECUTABLE=$tools/win_flex.exe" "-DBISON_EXECUTABLE=$tools/win_bison.exe" "-DUTHASH_INCLUDE_DIR=$headers" "-DUTLIST_INCLUDE_DIR=$headers"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install macOS dependencies and configure
+        if: runner.os == 'macOS'
+        run: |
+          brew install bison flex uthash ninja
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_PREFIX_PATH="$(brew --prefix)" \
+            -DBISON_EXECUTABLE="$(brew --prefix bison)/bin/bison" \
+            -DFLEX_EXECUTABLE="$(brew --prefix flex)/bin/flex"
+
+      - name: Build
+        run: cmake --build build --config ${{ matrix.build_type }} --parallel 4
+
+      - name: Test
+        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure --timeout 60 --parallel 4 --no-tests=error --output-junit results.xml
+
+      - name: Install
+        run: cmake --install build --config ${{ matrix.build_type }} --prefix install
+
+      - name: Upload binaries and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xdrzcc-${{ matrix.platform.os }}-${{ matrix.platform.arch }}-${{ matrix.build_type }}
+          path: |
+            install/
+            build/results.xml
+            build/Testing/Temporary/LastTest.log
