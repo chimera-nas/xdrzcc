@@ -87,7 +87,7 @@ jobs:
         platform:
           - {os: windows, runner: windows-2022, arch: x64}
           - {os: windows, runner: windows-11-arm, arch: ARM64}
-          - {os: macos, runner: macos-14, arch: ARM64}
+          - {os: macos, runner: macos-26, arch: ARM64}
     steps:
       - uses: actions/checkout@v4
         with:
