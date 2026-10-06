@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-only
 
+#undef NDEBUG
 #include <assert.h>
 
 #include "opaque_xdr.h"
@@ -51,6 +52,28 @@ main(
 
     assert(memcmp(xdr_iovec_data(msg2.data.iov), data, 7) == 0);
 
+    /* Aligned fixed opaques previously contributed zero, and unaligned ones
+     * only their padding. Compare the generated estimate with real encoding. */
+    struct FixedMsg fixed = { .odd = { 1, 2, 3 }, .tail = 0x12345678 };
+    niov_out = 3;
+    xdr_iovec_set_data(&iov_in, buffer);
+    xdr_iovec_set_len(&iov_in, sizeof(buffer));
+    rc = marshall_FixedMsg(&fixed, &iov_in, iov_out, &niov_out, NULL, 0);
+    assert(rc == 32 && marshall_length_FixedMsg(&fixed) == rc);
+    struct FixedMsg decoded;
+    assert(niov_out == 1 && buffer[3] == 0);
+    assert(unmarshall_FixedMsg(&decoded, iov_out, 1, NULL, dbuf) == rc);
+    assert(decoded.tail == fixed.tail && !memcmp(decoded.odd, fixed.odd, 3));
+    xdr_iovec_set_data(&iov_out[0], buffer);
+    xdr_iovec_set_len(&iov_out[0], 3);
+    xdr_iovec_set_data(&iov_out[1], buffer + 3);
+    xdr_iovec_set_len(&iov_out[1], 29);
+    assert(unmarshall_FixedMsg(&decoded, iov_out, 2, NULL, dbuf) == rc);
+    assert(decoded.tail == fixed.tail && !memcmp(decoded.odd, fixed.odd, 3));
+    /* A fixed field truncated immediately before its pad must be refused. */
+    assert(unmarshall_FixedMsg(&decoded, iov_out, 1, NULL, dbuf) < 0);
+    xdr_iovec_set_len(&iov_out[1], 0);
+    assert(unmarshall_FixedMsg(&decoded, iov_out, 2, NULL, dbuf) < 0);
     xdr_dbuf_free(dbuf);
 
     return 0;

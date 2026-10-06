@@ -56,9 +56,10 @@ typedef struct {
 #ifndef XDR_DBUF_DEFINED
 #define XDR_DBUF_DEFINED
 struct xdr_dbuf {
-    void *buffer;
-    int   size;
-    int   used;
+    void                    *buffer;
+    int                      size;
+    int                      used;
+    struct xdr_decode_scope *decode_scope;
 };
 typedef struct xdr_dbuf xdr_dbuf;
 #endif // ifndef XDR_DBUF_DEFINED
@@ -68,18 +69,20 @@ xdr_dbuf_init(
     xdr_dbuf *dbuf,
     int       bytes)
 {
-    dbuf->buffer = malloc(bytes);
-    dbuf->used   = 0;
-    dbuf->size   = bytes;
+    dbuf->buffer       = malloc(bytes);
+    dbuf->used         = 0;
+    dbuf->decode_scope = NULL;
+    dbuf->size         = bytes;
 } /* xdr_dbuf_init */
 
 static inline void
 xdr_dbuf_destroy(xdr_dbuf *dbuf)
 {
     free(dbuf->buffer);
-    dbuf->buffer = NULL;
-    dbuf->size   = 0;
-    dbuf->used   = 0;
+    dbuf->buffer       = NULL;
+    dbuf->size         = 0;
+    dbuf->used         = 0;
+    dbuf->decode_scope = NULL;
 } /* xdr_dbuf_destroy */
 
 static inline xdr_dbuf *
@@ -103,7 +106,8 @@ xdr_dbuf_free(xdr_dbuf *dbuf)
 static inline void
 xdr_dbuf_reset(xdr_dbuf *dbuf)
 {
-    dbuf->used = 0;
+    dbuf->used         = 0;
+    dbuf->decode_scope = NULL;
 } /* xdr_dbuf_reset */
 
 static FORCE_INLINE void * WARN_UNUSED_RESULT
@@ -248,6 +252,77 @@ typedef struct {
     int        niov;
     uint32_t   length;
 } xdr_iovecr;
+
+/* Decoding may clone payload references before a later field fails. Keep a
+ * scoped ledger of only those clones, never borrowed RDMA chunk references.
+ * Successful outermost decode transfers ownership to its consumer. An RPC
+ * adapter can add an outer scope to also reject trailing data or admission
+ * failure before making that transfer. */
+struct xdr_decode_ref {
+    struct xdr_decode_ref *next;
+    xdr_iovecr            *value;
+};
+
+struct xdr_decode_scope {
+    struct xdr_decode_scope *parent;
+    struct xdr_decode_ref   *refs;
+};
+
+static inline void
+xdr_decode_begin(
+    xdr_dbuf                *dbuf,
+    struct xdr_decode_scope *scope)
+{
+    scope->parent      = dbuf->decode_scope;
+    scope->refs        = NULL;
+    dbuf->decode_scope = scope;
+} // xdr_decode_begin
+
+static inline int
+xdr_decode_track(
+    xdr_dbuf   *dbuf,
+    xdr_iovecr *value)
+{
+#ifdef xdr_iovec_release_private
+    struct xdr_decode_ref *ref = xdr_dbuf_alloc_space(sizeof(*ref), dbuf);
+    if (!ref) {
+        return -1;
+    }
+    ref->value               = value;
+    ref->next                = dbuf->decode_scope->refs;
+    dbuf->decode_scope->refs = ref;
+#endif // ifdef xdr_iovec_release_private
+    return 0;
+} // xdr_decode_track
+
+static inline int
+xdr_decode_end(
+    xdr_dbuf                *dbuf,
+    struct xdr_decode_scope *scope,
+    int                      result)
+{
+    struct xdr_decode_ref *ref = scope->refs;
+
+    dbuf->decode_scope = scope->parent;
+    if (result < 0) {
+        while (ref) {
+#ifdef xdr_iovec_release_private
+            for (int i = 0; i < ref->value->niov; i++) {
+                xdr_iovec_release_private(&ref->value->iov[i]);
+            }
+#endif // ifdef xdr_iovec_release_private
+            ref->value->niov = 0;
+            ref              = ref->next;
+        }
+    } else if (ref && scope->parent) {
+        while (ref->next) {
+            ref = ref->next;
+        }
+        ref->next           = scope->parent->refs;
+        scope->parent->refs = scope->refs;
+    }
+    return result;
+} // xdr_decode_end
 
 void
 dump_output(
