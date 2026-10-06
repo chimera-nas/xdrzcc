@@ -115,6 +115,9 @@ emit_marshall(
             fprintf(output,
                     "    if (unlikely(xdr_write_cursor_append(cursor, in->%s, %s) < 0)) return -1;\n",
                     name, type->array_size);
+            fprintf(output,
+                    "    { uint32_t zero = 0; if (unlikely(xdr_write_cursor_append(cursor, &zero, xdr_pad(%s)) < 0)) return -1; }\n",
+                    type->array_size);
         } else if (type->zerocopy) {
             fprintf(output,
                     "    if (unlikely(__marshall_opaque_zerocopy(&in->%s, cursor) < 0)) return -1;\n",
@@ -207,6 +210,11 @@ emit_unmarshall(
             fprintf(output,
                     "    rc = xdr_read_cursor_vector_extract(cursor, out->%s, %s);\n",
                     name, type->array_size);
+            fprintf(output, "    if (unlikely(rc < 0)) return rc;\n");
+            fprintf(output,
+                    "    { uint32_t pad; if (unlikely(xdr_read_cursor_vector_extract(cursor, &pad, xdr_pad(%s)) < 0)) return -1; }\n",
+                    type->array_size);
+            fprintf(output, "    rc += xdr_pad(%s);\n", type->array_size);
         } else if (type->zerocopy) {
             fprintf(output,
                     "    rc = __unmarshall_opaque_zerocopy_vector(&out->%s, cursor, dbuf);\n",
@@ -346,11 +354,14 @@ emit_unmarshall_contig(
     if (type->opaque) {
         if (type->array) {
             fprintf(output,
+                    "    if (unlikely((uint64_t) cursor->iov_offset + %s + xdr_pad(%s) > xdr_iovec_len(cursor->cur))) return -1;\n",
+                    type->array_size, type->array_size);
+            fprintf(output,
                     "    memcpy(out->%s, (char *) xdr_iovec_data(cursor->cur) + cursor->iov_offset, %s);\n",
                     name, type->array_size);
-            fprintf(output, "    cursor->iov_offset += %s;\n", type->array_size);
-            fprintf(output, "    cursor->offset += %s;\n", type->array_size);
-            fprintf(output, "    len += %s;\n", type->array_size);
+            fprintf(output, "    cursor->iov_offset += %s + xdr_pad(%s);\n", type->array_size, type->array_size);
+            fprintf(output, "    cursor->offset += %s + xdr_pad(%s);\n", type->array_size, type->array_size);
+            fprintf(output, "    len += %s + xdr_pad(%s);\n", type->array_size, type->array_size);
             fprintf(output, "    rc = 0;\n");
         } else if (type->zerocopy) {
             fprintf(output,
@@ -736,7 +747,7 @@ emit_length_member(
 
     if (emit_type->opaque) {
         if (emit_type->array) {
-            fprintf(source, "    length += xdr_pad(%s);\n", emit_type->array_size);
+            fprintf(source, "    length += %s + xdr_pad(%s);\n", emit_type->array_size, emit_type->array_size);
         } else if (emit_type->zerocopy) {
             fprintf(source, "    length += 4 + in->%s.length + xdr_pad(in->%s.length);\n", name, name);
         } else {
@@ -1241,17 +1252,21 @@ emit_program(
                     fprintf(source, "    xdr_dbuf *dbuf)\n");
                     fprintf(source, "{\n");
                     fprintf(source, "    struct xdr_read_cursor cursor;\n");
+                    fprintf(source, "    struct xdr_decode_scope scope;\n");
+                    fprintf(source, "    xdr_decode_begin(dbuf, &scope);\n");
                     fprintf(source, "    if (niov == 1) {\n");
                     fprintf(source, "        xdr_read_cursor_contig_init(&cursor, iov, rdma_chunk);\n");
                     /* A builtin used directly as a procedure argument or
                      * result has no declaration to carry a bound, and this
                      * wrapper is emitted once per type rather than per use,
                      * so the bounded-string decoders are called unbounded. */
-                    fprintf(source, "        return __unmarshall_%s_contig(out%s, &cursor, dbuf);\n",
+                    fprintf(source,
+                            "        return xdr_decode_finish(dbuf, &scope, rdma_chunk, __unmarshall_%s_contig(out%s, &cursor, dbuf));\n",
                             type->name, string_bound_arg(type));
                     fprintf(source, "    } else {\n");
                     fprintf(source, "        xdr_read_cursor_vector_init(&cursor, iov, niov, rdma_chunk);\n");
-                    fprintf(source, "        return __unmarshall_%s_vector(out%s, &cursor, dbuf);\n",
+                    fprintf(source,
+                            "        return xdr_decode_finish(dbuf, &scope, rdma_chunk, __unmarshall_%s_vector(out%s, &cursor, dbuf));\n",
                             type->name, string_bound_arg(type));
                     fprintf(source, "    }\n");
                     fprintf(source, "}\n\n");
@@ -1336,7 +1351,7 @@ emit_program(
 
         format_param_type(call_type_buf, sizeof(call_type_buf), functionp->call_type);
 
-        fprintf(source, "    case %d:\n", functionp->id);
+        fprintf(source, "    case %d: {\n", functionp->id);
 
         /* Check if the function is implemented */
         fprintf(source, "        if (prog->recv_call_%s == NULL) {\n",
@@ -1354,10 +1369,13 @@ emit_program(
                     functionp->name, functionp->name);
             fprintf(source, "        if (unlikely(%s_arg == NULL)) return 1;\n",
                     functionp->name);
+            fprintf(source, "        struct xdr_decode_scope scope;\n");
+            fprintf(source, "        xdr_decode_begin(encoding->dbuf, &scope);\n");
             fprintf(source,
                     "        len = unmarshall_%s(%s_arg, iov, niov, encoding->read_chunk, encoding->dbuf);\n",
                     functionp->call_type->name, functionp->name);
-            fprintf(source, "        if (unlikely(len != length)) return 2;\n");
+            fprintf(source,
+                    "        len = xdr_decode_finish(encoding->dbuf, &scope, encoding->read_chunk, len < 0 || len != length ? -1 : len);\n");
             fprintf(source, "        if (len < 0) return 2;\n");
 
             /* Then make the call - builtin scalars are passed by value */
@@ -1377,7 +1395,7 @@ emit_program(
                     functionp->name);
 
         }
-        fprintf(source, "        break;\n\n");
+        fprintf(source, "        break;\n        }\n\n");
     }
 
     fprintf(source, "    default:\n");
@@ -1448,7 +1466,7 @@ emit_program(
              * away.  Complete the caller with that status and no reply rather
              * than trying to unmarshall a body that is not there. */
             fprintf(source,
-                    "        if (unlikely(status)) { callback_%s(evpl, verf, %s, status, callback_private_data); return 0; }\n",
+                    "        if (unlikely(status)) { if (read_chunk) read_chunk->length = 0; callback_%s(evpl, verf, %s, status, callback_private_data); return 0; }\n",
                     functionp->name, err_reply);
             if (functionp->reply_type->array) {
                 fprintf(source, "        %s_arg = xdr_dbuf_alloc_space(sizeof(*%s_arg) * %s, dbuf);\n",
@@ -1457,8 +1475,11 @@ emit_program(
                 fprintf(source, "        %s_arg = xdr_dbuf_alloc_space(sizeof(*%s_arg), dbuf);\n",
                         functionp->name, functionp->name);
             }
-            fprintf(source, "        if (unlikely(%s_arg == NULL)) return 1;\n",
-                    functionp->name);
+            fprintf(source,
+                    "        if (unlikely(%s_arg == NULL)) { if (read_chunk) read_chunk->length = 0; callback_%s(evpl, verf, %s, EVPL_RPC2_REPLY_DECODE_ERROR, callback_private_data); return 0; }\n",
+                    functionp->name, functionp->name, err_reply);
+            fprintf(source, "        struct xdr_decode_scope scope;\n");
+            fprintf(source, "        xdr_decode_begin(dbuf, &scope);\n");
             if (functionp->reply_type->array) {
                 fprintf(source, "        len = 0;\n");
                 fprintf(source, "        {\n");
@@ -1471,7 +1492,7 @@ emit_program(
                         "                    int _rc = __unmarshall_%s_contig(&%s_arg[_i], &cursor, dbuf);\n",
                         functionp->reply_type->name, functionp->name);
                 fprintf(source,
-                        "                    if (unlikely(_rc < 0)) { callback_%s(evpl, verf, %s, EVPL_RPC2_REPLY_DECODE_ERROR, callback_private_data); return 0; }\n",
+                        "                    if (unlikely(_rc < 0)) { xdr_decode_finish(dbuf, &scope, read_chunk, -1); callback_%s(evpl, verf, %s, EVPL_RPC2_REPLY_DECODE_ERROR, callback_private_data); return 0; }\n",
                         functionp->name, err_reply);
                 fprintf(source, "                    len += _rc;\n");
                 fprintf(source, "                }\n");
@@ -1483,7 +1504,7 @@ emit_program(
                         "                    int _rc = __unmarshall_%s_vector(&%s_arg[_i], &cursor, dbuf);\n",
                         functionp->reply_type->name, functionp->name);
                 fprintf(source,
-                        "                    if (unlikely(_rc < 0)) { callback_%s(evpl, verf, %s, EVPL_RPC2_REPLY_DECODE_ERROR, callback_private_data); return 0; }\n",
+                        "                    if (unlikely(_rc < 0)) { xdr_decode_finish(dbuf, &scope, read_chunk, -1); callback_%s(evpl, verf, %s, EVPL_RPC2_REPLY_DECODE_ERROR, callback_private_data); return 0; }\n",
                         functionp->name, err_reply);
                 fprintf(source, "                    len += _rc;\n");
                 fprintf(source, "                }\n");
@@ -1494,6 +1515,9 @@ emit_program(
                         "        len = unmarshall_%s(%s_arg, iov, niov, read_chunk, dbuf);\n",
                         functionp->reply_type->name, functionp->name);
             }
+            fprintf(source,
+                    "        len = xdr_decode_finish(dbuf, &scope, read_chunk, len < 0 || len != length ? -1 : len);\n")
+            ;
             fprintf(source,
                     "        if (unlikely(len != length || len < 0)) { callback_%s(evpl, verf, %s, EVPL_RPC2_REPLY_DECODE_ERROR, callback_private_data); return 0; }\n",
                     functionp->name, err_reply);
@@ -1655,7 +1679,7 @@ emit_program(
 
         if (has_args) {
             fprintf(source, "    xdr_dbuf *dbuf = (xdr_dbuf *) evpl_rpc2_thread_get_client_dbuf(conn->thread);\n");
-            fprintf(source, "    struct evpl_rpc2_rdma_chunk rdma_chunk;\n");
+            fprintf(source, "    struct evpl_rpc2_rdma_chunk rdma_chunk = { 0 };\n");
             fprintf(source, "    rdma_chunk.length = 0;\n");
             fprintf(source, "    rdma_chunk.max_length = conn->rdma && ddp ? UINT32_MAX : 0;\n");
             fprintf(source, "    rdma_chunk.niov = 0;\n");
@@ -1920,12 +1944,18 @@ emit_wrappers(
     fprintf(source, "    struct evpl_rpc2_rdma_chunk *rdma_chunk,\n");
     fprintf(source, "    xdr_dbuf *dbuf) {\n");
     fprintf(source, "    struct xdr_read_cursor cursor;\n");
+    fprintf(source, "    struct xdr_decode_scope scope;\n");
+    fprintf(source, "    xdr_decode_begin(dbuf, &scope);\n");
     fprintf(source, "    if (niov == 1) {\n");
     fprintf(source, "        xdr_read_cursor_contig_init(&cursor, iov, rdma_chunk);\n");
-    fprintf(source, "        return __unmarshall_%s_contig(out, &cursor, dbuf);\n", name);
+    fprintf(source,
+            "        return xdr_decode_finish(dbuf, &scope, rdma_chunk, __unmarshall_%s_contig(out, &cursor, dbuf));\n",
+            name);
     fprintf(source, "    } else {\n");
     fprintf(source, "        xdr_read_cursor_vector_init(&cursor, iov, niov, rdma_chunk);\n");
-    fprintf(source, "        return __unmarshall_%s_vector(out, &cursor, dbuf);\n", name);
+    fprintf(source,
+            "        return xdr_decode_finish(dbuf, &scope, rdma_chunk, __unmarshall_%s_vector(out, &cursor, dbuf));\n",
+            name);
     fprintf(source, "    }\n");
     fprintf(source, "}\n\n");
 } /* emit_wrappers */
@@ -2468,7 +2498,8 @@ main(
                             fprintf(source, "            skip_body_len = 1;\n");
                         } else if (xdr_union_casep->type->opaque) {
                             /* Fixed-size opaque array - still need body_len */
-                            fprintf(source, "            body_len = xdr_pad(%s);\n",
+                            fprintf(source, "            body_len = %s + xdr_pad(%s);\n",
+                                    xdr_union_casep->type->array_size,
                                     xdr_union_casep->type->array_size);
                         } else {
                             fprintf(source, "            body_len = __marshall_length_%s(&in->%s);\n",
@@ -2492,7 +2523,8 @@ main(
                             fprintf(source, "            skip_body_len = 1;\n");
                         } else if (xdr_union_casep->type->opaque) {
                             /* Fixed-size opaque array - still need body_len */
-                            fprintf(source, "            body_len = xdr_pad(%s);\n",
+                            fprintf(source, "            body_len = %s + xdr_pad(%s);\n",
+                                    xdr_union_casep->type->array_size,
                                     xdr_union_casep->type->array_size);
                         } else {
                             fprintf(source, "            body_len = __marshall_length_%s(&in->%s);\n",

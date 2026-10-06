@@ -125,6 +125,23 @@ xdr_read_cursor_vector_init(
     cursor->read_chunk = read_chunk;
 } /* xdr_read_cursor_vector_init */
 
+static FORCE_INLINE int
+xdr_decode_finish(
+    xdr_dbuf                    *dbuf,
+    struct xdr_decode_scope     *scope,
+    struct evpl_rpc2_rdma_chunk *chunk,
+    int                          result)
+{
+#if EVPL_RPC2
+    if (result < 0 && chunk) {
+        /* No result escapes on failure, even if an earlier item claimed the
+         * chunk. Its original owner must reclaim it, not the clone ledger. */
+        chunk->length = 0;
+    }
+#endif /* if EVPL_RPC2 */
+    return xdr_decode_end(dbuf, scope, result);
+} /* xdr_decode_finish */
+
 static FORCE_INLINE void
 xdr_write_cursor_init(
     struct xdr_write_cursor     *cursor,
@@ -238,31 +255,22 @@ xdr_read_cursor_vector_skip(
     struct xdr_read_cursor *cursor,
     unsigned int            bytes)
 {
-    unsigned int done, chunk;
+    unsigned int done = 0, chunk;
 
-    if (cursor->iov_offset + bytes <= xdr_iovec_len(cursor->cur)) {
-        cursor->iov_offset += bytes;
-        cursor->offset     += bytes;
-    } else {
-        done = 0;
-        while (done < bytes) {
-            chunk = xdr_iovec_len(cursor->cur) - cursor->iov_offset;
-            if (chunk > bytes - done) {
-                chunk = bytes - done;
-            }
-
-            done               += chunk;
-            cursor->iov_offset += chunk;
-            cursor->offset     += chunk;
-
-            if (done < bytes && cursor->cur == cursor->last) {
-                return -1;
-            }
-
-            if (cursor->iov_offset == xdr_iovec_len(cursor->cur)) {
-                cursor->cur++;
-                cursor->iov_offset = 0;
-            }
+    while (done < bytes) {
+        if (unlikely(cursor->cur > cursor->last)) {
+            return -1;
+        }
+        chunk = xdr_iovec_len(cursor->cur) - cursor->iov_offset;
+        if (chunk > bytes - done) {
+            chunk = bytes - done;
+        }
+        done               += chunk;
+        cursor->iov_offset += chunk;
+        cursor->offset     += chunk;
+        if (cursor->iov_offset == xdr_iovec_len(cursor->cur)) {
+            cursor->cur++;
+            cursor->iov_offset = 0;
         }
     }
 
@@ -817,7 +825,8 @@ __unmarshall_opaque_fixed_vector(
     struct xdr_read_cursor *cursor,
     xdr_dbuf               *dbuf)
 {
-    int pad, chunk, left = size;
+    int      pad;
+    uint32_t chunk, left = size;
 
     /* A zero-length payload describes no bytes, so it must not carry a
      * buffer reference.  Handing one back would oblige the receiver to
@@ -838,6 +847,9 @@ __unmarshall_opaque_fixed_vector(
 
     v->length = size;
     v->niov   = 0;
+    if (xdr_decode_track(dbuf, v) < 0) {
+        return -1;
+    }
 
     do {
         if (unlikely(cursor->cur > cursor->last)) {
@@ -871,7 +883,9 @@ __unmarshall_opaque_fixed_vector(
 
     pad = (4 - (size & 0x3)) & 0x3;
 
-    xdr_read_cursor_vector_skip(cursor, pad);
+    if (xdr_read_cursor_vector_skip(cursor, pad) < 0) {
+        return -1;
+    }
 
     return size + pad;
 } /* __unmarshall_opaque_fixed_vector */
@@ -909,13 +923,17 @@ __unmarshall_opaque_fixed_contig(
     }
 
     v->length = size;
-    v->niov   = 1;
+    v->niov   = 0;
     v->iov    = xdr_dbuf_alloc_space(sizeof(*v->iov), dbuf);
     if (unlikely(v->iov == NULL)) {
         return -1;
     }
 
+    if (xdr_decode_track(dbuf, v) < 0) {
+        return -1;
+    }
     xdr_iovec_copy_private(&v->iov[0], cursor->cur);
+    v->niov = 1;
     xdr_iovec_set_data(&v->iov[0], (void *) ((char *) xdr_iovec_data(cursor->cur) + cursor->iov_offset));
     xdr_iovec_set_len(&v->iov[0], size);
 
@@ -978,12 +996,23 @@ __marshall_opaque_zerocopy(
     }
 
 #if EVPL_RPC2
-    if (cursor->rdma_chunk && cursor->rdma_chunk->max_length > 0 && v->length <= cursor->rdma_chunk->max_length) {
-        cursor->rdma_chunk->iov          = v->iov;
-        cursor->rdma_chunk->niov         = v->niov;
-        cursor->rdma_chunk->length       = v->length;
-        cursor->rdma_chunk->xdr_position = cursor->scratch_used - cursor->scratch_reserved;
-        return 0;
+    if (cursor->rdma_chunk) {
+        struct evpl_rpc2_rdma_chunk *chunk = cursor->rdma_chunk;
+
+        /* The transport supports one chunk, for the first eligible item.
+         * Consume it even when that item or the offered chunk is empty;
+         * later items must remain inline (RFC 8267 section 6.4.1).  A short
+         * non-empty chunk is still selected: the transport reports ERR_CHUNK
+         * instead of silently returning that item inline. */
+        cursor->rdma_chunk = NULL;
+
+        if (chunk->max_length > 0 || chunk->num_segments > 0) {
+            chunk->iov          = v->iov;
+            chunk->niov         = v->niov;
+            chunk->length       = v->length;
+            chunk->xdr_position = cursor->scratch_used - cursor->scratch_reserved;
+            return 0;
+        }
     }
  #endif /* if EVPL_RPC2 */
 
@@ -1136,6 +1165,60 @@ __unmarshall_opaque_contig(
     return len;
 } /* __unmarshall_opaque_contig */
 
+#if EVPL_RPC2
+static FORCE_INLINE int
+xdr_read_cursor_chunk_extract(
+    xdr_iovecr             *v,
+    uint32_t                size,
+    struct xdr_read_cursor *cursor)
+{
+    struct evpl_rpc2_rdma_chunk *chunk = cursor->read_chunk;
+    uint32_t                     left  = size;
+    int                          i;
+
+    if (!chunk || (chunk->xdr_position != cursor->offset &&
+                   chunk->xdr_position != UINT32_MAX)) {
+        return 0;
+    }
+
+    /* A Write chunk matches only the first eligible result, including an
+     * empty one.  Keep ownership metadata in the transport, but never alias
+     * its reference into a subsequent inline result. */
+    cursor->read_chunk = NULL;
+    if (!chunk->length) {
+        return 0;
+    }
+
+    /* Read chunks may include roundup; Write chunks must not (RFC 8166,
+     * sections 3.4.5.2 and 3.4.6.2).  Neither exposes padding to its caller. */
+    if (chunk->length != size &&
+        (chunk->xdr_position == UINT32_MAX ||
+         (uint64_t) chunk->length != (uint64_t) size + xdr_pad(size))) {
+        /* No reference escaped to the decoded result.  Leave the iovecs
+         * owned by the transport and mark the rejected chunk unclaimed. */
+        chunk->length = 0;
+        return -1;
+    }
+
+    for (i = 0; i < chunk->niov; i++) {
+        uint32_t length = xdr_iovec_len(&chunk->iov[i]);
+        if (length > left) {
+            length = left;
+            xdr_iovec_set_len(&chunk->iov[i], length);
+        }
+        left -= length;
+    }
+    if (left) {
+        chunk->length = 0;
+        return -1;
+    }
+    v->iov    = chunk->iov;
+    v->niov   = chunk->niov;
+    v->length = size;
+    return 1;
+} /* xdr_read_cursor_chunk_extract */
+#endif /* if EVPL_RPC2 */
+
 static FORCE_INLINE int WARN_UNUSED_RESULT
 __unmarshall_opaque_zerocopy_vector(
     xdr_iovecr             *v,
@@ -1152,15 +1235,9 @@ __unmarshall_opaque_zerocopy_vector(
     }
 
 #if EVPL_RPC2
-    if (cursor->read_chunk && cursor->read_chunk->length) {
-        struct evpl_rpc2_rdma_chunk *chunk = cursor->read_chunk;
-        if (chunk->xdr_position == cursor->offset ||
-            chunk->xdr_position == UINT32_MAX) {
-            v->iov    = chunk->iov;
-            v->niov   = chunk->niov;
-            v->length = chunk->length;
-            return 4;
-        }
+    rc = xdr_read_cursor_chunk_extract(v, size, cursor);
+    if (rc) {
+        return rc < 0 ? rc : 4;
     }
 #endif /* if EVPL_RPC2 */
 
@@ -1189,15 +1266,9 @@ __unmarshall_opaque_zerocopy_contig(
     len += rc;
 
 #if EVPL_RPC2
-    if (cursor->read_chunk && cursor->read_chunk->length) {
-        struct evpl_rpc2_rdma_chunk *chunk = cursor->read_chunk;
-        if (chunk->xdr_position == cursor->offset ||
-            chunk->xdr_position == UINT32_MAX) {
-            v->iov    = chunk->iov;
-            v->niov   = chunk->niov;
-            v->length = chunk->length;
-            return len;
-        }
+    rc = xdr_read_cursor_chunk_extract(v, size, cursor);
+    if (rc) {
+        return rc < 0 ? rc : len;
     }
 #endif /* if EVPL_RPC2 */
 

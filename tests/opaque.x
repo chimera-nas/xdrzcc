@@ -7,3 +7,12 @@
 struct MyMsg {
     zcopaque  data<>;
 };
+
+typedef opaque fixed_id[16];
+
+struct FixedMsg {
+    opaque odd[3];
+    opaque verifier[8];
+    fixed_id id;
+    unsigned int tail;
+};
